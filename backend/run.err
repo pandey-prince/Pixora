@@ -1,0 +1,50 @@
+$ bun --watch src/server.ts
+10 | 
+11 |   const user = await prisma.user.findUnique({
+12 |     where: { clerkId: userId },
+13 |     select: { id: true, clerkId: true },
+14 |   });
+15 |   if (!user) throw new HttpError(403, "User profile is not synced yet");
+                        ^
+error: User profile is not synced yet
+ statusCode: 403,
+
+      at <anonymous> (C:\Users\princ\Desktop\project\photo-gallery\backend\src\middleware\auth.middleware.ts:15:20)
+
+10 | 
+11 |   const user = await prisma.user.findUnique({
+12 |     where: { clerkId: userId },
+13 |     select: { id: true, clerkId: true },
+14 |   });
+15 |   if (!user) throw new HttpError(403, "User profile is not synced yet");
+                        ^
+error: User profile is not synced yet
+ statusCode: 403,
+
+      at <anonymous> (C:\Users\princ\Desktop\project\photo-gallery\backend\src\middleware\auth.middleware.ts:15:20)
+
+10 | 
+11 |   const user = await prisma.user.findUnique({
+12 |     where: { clerkId: userId },
+13 |     select: { id: true, clerkId: true },
+14 |   });
+15 |   if (!user) throw new HttpError(403, "User profile is not synced yet");
+                        ^
+error: User profile is not synced yet
+ statusCode: 403,
+
+      at <anonymous> (C:\Users\princ\Desktop\project\photo-gallery\backend\src\middleware\auth.middleware.ts:15:20)
+
+10 | 
+11 |   const user = await prisma.user.findUnique({
+12 |     where: { clerkId: userId },
+13 |     select: { id: true, clerkId: true },
+14 |   });
+15 |   if (!user) throw new HttpError(403, "User profile is not synced yet");
+                        ^
+error: User profile is not synced yet
+ statusCode: 403,
+
+      at <anonymous> (C:\Users\princ\Desktop\project\photo-gallery\backend\src\middleware\auth.middleware.ts:15:20)
+
+error: script "dev" exited with code 255

@@ -5,10 +5,14 @@ import { PhotoCard } from "./PhotoCard";
 interface GalleryGridProps {
   photos: Photo[];
   deletingId: string;
+  selectedIds: Set<string>;
   onDelete: (photo: Photo) => void;
+  onDownload: (photo: Photo) => void;
+  onOpen: (photo: Photo) => void;
+  onToggleSelect: (photo: Photo) => void;
 }
 
-export const GalleryGrid = ({ photos, deletingId, onDelete }: GalleryGridProps) => {
+export const GalleryGrid = ({ photos, deletingId, selectedIds, onDelete, onDownload, onOpen, onToggleSelect }: GalleryGridProps) => {
   if (photos.length === 0) {
     return (
       <div className="grid min-h-80 place-items-center rounded-[2rem] border border-dashed border-slate-300 bg-white text-center shadow-sm">
@@ -24,7 +28,16 @@ export const GalleryGrid = ({ photos, deletingId, onDelete }: GalleryGridProps) 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6">
       {photos.map((photo) => (
-        <PhotoCard key={photo.id} photo={photo} deleting={deletingId === photo.id} onDelete={onDelete} />
+        <PhotoCard
+          key={photo.id}
+          photo={photo}
+          deleting={deletingId === photo.id}
+          selected={selectedIds.has(photo.id)}
+          onDelete={onDelete}
+          onDownload={onDownload}
+          onOpen={onOpen}
+          onToggleSelect={onToggleSelect}
+        />
       ))}
     </div>
   );

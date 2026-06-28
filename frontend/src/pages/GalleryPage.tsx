@@ -1,7 +1,8 @@
 import { useAuth, useUser, UserButton } from "@clerk/react";
-import { Camera, Images, Sparkles } from "lucide-react";
+import JSZip from "jszip";
+import { Camera, Check, Download, Images, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
 import { GallerySkeleton } from "../components/GallerySkeleton";
 import { InfiniteScrollTrigger } from "../components/InfiniteScrollTrigger";
@@ -16,6 +17,9 @@ export const GalleryPage = () => {
   const { photos, isLoading, isLoadingMore, hasMore, error, reload, loadMore, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
   const [actionError, setActionError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [zoomedPhoto, setZoomedPhoto] = useState<Photo | null>(null);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const handleDelete = async (photo: Photo) => {
     if (!window.confirm(`Delete "${photo.fileName}"? This cannot be undone.`)) return;
@@ -30,6 +34,89 @@ export const GalleryPage = () => {
       setActionError(getApiError(deleteError));
     } finally {
       setDeletingId("");
+    }
+  };
+
+  const selectedPhotos = useMemo(
+    () => photos.filter((photo) => selectedIdSet.has(photo.id)),
+    [photos, selectedIdSet],
+  );
+
+  useEffect(() => {
+    if (!zoomedPhoto) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setZoomedPhoto(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [zoomedPhoto]);
+
+  useEffect(() => {
+    setSelectedIds((current) => current.filter((id) => photos.some((photo) => photo.id === id)));
+  }, [photos]);
+
+  const toggleSelect = (photo: Photo) => {
+    setSelectedIds((current) =>
+      current.includes(photo.id) ? current.filter((id) => id !== photo.id) : [...current, photo.id],
+    );
+  };
+
+  const clearSelection = () => setSelectedIds([]);
+  const selectAllVisible = () => setSelectedIds(photos.map((photo) => photo.id));
+
+  const downloadBlob = async (blob: Blob, fileName: string) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.rel = "noopener";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
+  const downloadPhoto = async (photo: Photo) => {
+    try {
+      const response = await fetch(photo.imageUrl);
+      if (!response.ok) throw new Error(`Failed to download ${photo.fileName}`);
+      const blob = await response.blob();
+      await downloadBlob(blob, photo.fileName);
+    } catch (downloadError) {
+      setActionError(downloadError instanceof Error ? downloadError.message : "Something went wrong while downloading");
+    }
+  };
+
+  const downloadSelected = async () => {
+    if (!selectedPhotos.length) return;
+    setActionError("");
+    try {
+      if (selectedPhotos.length === 1) {
+        await downloadPhoto(selectedPhotos[0]!);
+        return;
+      }
+
+      const zip = new JSZip();
+      const usedNames = new Map<string, number>();
+      for (const photo of selectedPhotos) {
+        const response = await fetch(photo.imageUrl);
+        if (!response.ok) throw new Error(`Failed to download ${photo.fileName}`);
+        const blob = await response.blob();
+        const count = usedNames.get(photo.fileName) ?? 0;
+        usedNames.set(photo.fileName, count + 1);
+        const baseName = photo.fileName.replace(/\.[^.]+$/, "");
+        const extension = photo.fileName.includes(".") ? photo.fileName.split(".").pop() ?? "jpg" : "jpg";
+        const suffix = count ? `-${count + 1}` : "";
+        zip.file(`${baseName}${suffix}.${extension}`, blob);
+      }
+      const archive = await zip.generateAsync({ type: "blob" });
+      await downloadBlob(archive, `pixora-${selectedPhotos.length}-photos.zip`);
+    } catch (downloadError) {
+      setActionError(downloadError instanceof Error ? downloadError.message : "Something went wrong while downloading");
     }
   };
 
@@ -71,15 +158,101 @@ export const GalleryPage = () => {
             {error && <button type="button" className="font-semibold" onClick={reload}>Retry</button>}
           </div>
         )}
+        {selectedPhotos.length > 0 && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-violet-200 bg-white px-4 py-3 shadow-sm">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">{selectedPhotos.length} selected</p>
+              <p className="text-xs text-slate-500">Download one file or bundle them into a zip.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAllVisible}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Check size={15} />
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <X size={15} />
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadSelected()}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-700"
+              >
+                <Download size={15} />
+                Download
+              </button>
+            </div>
+          </div>
+        )}
         {isLoading ? (
           <GallerySkeleton />
         ) : (
           <>
-            <GalleryGrid photos={photos} deletingId={deletingId} onDelete={(photo) => void handleDelete(photo)} />
+            <GalleryGrid
+              photos={photos}
+              deletingId={deletingId}
+              selectedIds={selectedIdSet}
+              onDelete={(photo) => void handleDelete(photo)}
+              onDownload={(photo) => void downloadPhoto(photo)}
+              onOpen={(photo) => setZoomedPhoto(photo)}
+              onToggleSelect={toggleSelect}
+            />
             {photos.length > 0 && <InfiniteScrollTrigger hasMore={hasMore} isLoading={isLoadingMore} onLoadMore={loadMore} />}
           </>
         )}
       </div>
+
+      {zoomedPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={() => setZoomedPhoto(null)}
+        >
+          <div
+            className="w-full max-w-6xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between text-white">
+              <div>
+                <p className="text-sm font-semibold">{zoomedPhoto.fileName}</p>
+                <p className="text-xs text-white/70">Use Escape or click outside to close</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void downloadPhoto(zoomedPhoto)}
+                  className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/25"
+                >
+                  <Download size={15} />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomedPhoto(null)}
+                  className="rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25"
+                  aria-label="Close photo viewer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="perspective-[1800px]">
+              <img
+                src={zoomedPhoto.imageUrl}
+                alt={zoomedPhoto.fileName}
+                className="animate-photo-pop max-h-[82vh] w-full rounded-[1.75rem] object-contain shadow-2xl shadow-black/40"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

@@ -12,6 +12,7 @@
   "dependencies": {
     "@clerk/react": "latest",
     "axios": "latest",
+    "jszip": "^3.10.1",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",

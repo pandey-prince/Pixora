@@ -5,7 +5,10 @@ export type CloudinaryUpload = Pick<UploadApiResponse, "public_id" | "secure_url
 
 export const uploadImage = (file: Express.Multer.File): Promise<CloudinaryUpload> =>
   new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
+    const dataUri = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+
+    cloudinary.uploader.upload(
+      dataUri,
       {
         folder: "photo-gallery",
         resource_type: "image",
@@ -20,7 +23,6 @@ export const uploadImage = (file: Express.Multer.File): Promise<CloudinaryUpload
         resolve({ public_id: result.public_id, secure_url: result.secure_url });
       },
     );
-    stream.end(file.buffer);
   });
 
 export const deleteImage = async (publicId: string): Promise<void> => {

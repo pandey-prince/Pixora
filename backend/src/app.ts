@@ -15,7 +15,9 @@ app.use(
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
   }),
 );
-app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+
+app.use(cors({ origin: "*" }));
+//app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
