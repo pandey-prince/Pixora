@@ -1,4 +1,4 @@
-import { ArrowRight, Camera, Cloud, Images, LockKeyhole, Sparkles } from "lucide-react";
+import { ArrowRight, Camera, Cloud, Images, LockKeyhole } from "lucide-react";
 import { useAuth } from "@clerk/react";
 import { Link } from "react-router-dom";
 
