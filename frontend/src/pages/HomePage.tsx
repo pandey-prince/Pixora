@@ -66,7 +66,7 @@ export const HomePage = () => {
       <div className="pointer-events-none absolute -left-64 top-0 h-[520px] w-[520px] rounded-full bg-violet-200/50 blur-3xl" />
       <div className="relative z-10">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white/80 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-violet-700 shadow-sm">
-          <Sparkles size={14} />
+         
           A beautiful home for every moment
         </div>
         <h1 className="max-w-2xl text-5xl font-black leading-[0.96] tracking-[-0.055em] sm:text-7xl">
