@@ -2,6 +2,10 @@
 
 A full-stack, private photo gallery built with React, TypeScript, Vite, Tailwind CSS, Bun, Express, Prisma 7, PostgreSQL, Clerk, and Cloudinary.
 
+**Live demo:** [pixora-photogallery.vercel.app](https://pixora-photogallery.vercel.app/)
+
+![Pixora home](docs/pixora-home.png)
+
 ## Structure
 
 ```text
