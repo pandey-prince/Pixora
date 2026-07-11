@@ -60,6 +60,9 @@ export const cryptoApi = {
 
 export const getApiError = (error: unknown) => {
   if (axios.isAxiosError<{ message?: string }>(error)) {
+    if (!error.response && (error.code === "ERR_NETWORK" || error.message === "Network Error")) {
+      return "Cannot reach the API server. Check your connection and try again.";
+    }
     return error.response?.data?.message ?? error.message;
   }
   return "Something went wrong";
