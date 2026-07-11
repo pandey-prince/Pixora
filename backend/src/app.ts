@@ -18,7 +18,24 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+const normalizeOrigin = (origin: string) => origin.replace(/\/$/, "");
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (normalizeOrigin(origin) === normalizeOrigin(env.FRONTEND_URL)) {
+        callback(null, origin);
+        return;
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", async (_req, res) => {
