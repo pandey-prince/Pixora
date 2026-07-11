@@ -1,13 +1,69 @@
 import type { Request, Response } from "express";
-import { createPhotos, getPhotos, removePhoto } from "../services/photo.service";
+import { createEncryptedPhoto, getPhotos, removePhoto } from "../services/photo.service";
 import { HttpError } from "../utils/http-error";
 
-export const uploadPhotos = async (req: Request, res: Response) => {
-  if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-    throw new HttpError(400, "At least one image is required");
+interface UploadMetadata {
+  encryptedKey?: string;
+  keyIv?: string;
+  contentIv?: string;
+  encryptedFileName?: string;
+  fileNameIv?: string;
+  mimeType?: string;
+  thumbIv?: string;
+}
+
+const parseMetadata = (raw: unknown): Required<Omit<UploadMetadata, "thumbIv">> & { thumbIv?: string } => {
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw new HttpError(400, "Missing encryption metadata");
   }
-  const photos = await createPhotos(req.dbUser!.id, req.files);
-  res.status(201).json({ photos });
+
+  let parsed: UploadMetadata;
+  try {
+    parsed = JSON.parse(raw) as UploadMetadata;
+  } catch {
+    throw new HttpError(400, "Invalid encryption metadata");
+  }
+
+  const { encryptedKey, keyIv, contentIv, encryptedFileName, fileNameIv, mimeType } = parsed;
+  if (!encryptedKey || !keyIv || !contentIv || !encryptedFileName || !fileNameIv || !mimeType) {
+    throw new HttpError(400, "Incomplete encryption metadata");
+  }
+
+  return {
+    encryptedKey,
+    keyIv,
+    contentIv,
+    encryptedFileName,
+    fileNameIv,
+    mimeType,
+    thumbIv: parsed.thumbIv,
+  };
+};
+
+export const uploadPhotos = async (req: Request, res: Response) => {
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const imageFile = files?.image?.[0];
+  const thumbFile = files?.thumbnail?.[0];
+
+  if (!imageFile) {
+    throw new HttpError(400, "Encrypted image is required");
+  }
+
+  const metadata = parseMetadata(req.body?.metadata);
+
+  const photo = await createEncryptedPhoto(req.dbUser!.id, {
+    imageBuffer: imageFile.buffer,
+    thumbBuffer: thumbFile?.buffer,
+    encryptedKey: metadata.encryptedKey,
+    keyIv: metadata.keyIv,
+    contentIv: metadata.contentIv,
+    encryptedFileName: metadata.encryptedFileName,
+    fileNameIv: metadata.fileNameIv,
+    mimeType: metadata.mimeType,
+    thumbIv: thumbFile ? metadata.thumbIv : undefined,
+  });
+
+  res.status(201).json({ photo });
 };
 
 export const listPhotos = async (req: Request, res: Response) => {

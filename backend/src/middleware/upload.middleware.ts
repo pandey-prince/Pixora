@@ -1,14 +1,12 @@
 import multer from "multer";
-import { HttpError } from "../utils/http-error";
 
+/**
+ * Uploads are already encrypted on the client, so the payload is opaque
+ * ciphertext (application/octet-stream), not an image. We therefore cannot
+ * validate the MIME type here. Size and field limits still apply; the encrypted
+ * blob is slightly larger than the original because of the GCM auth tag.
+ */
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 20 },
-  fileFilter: (_req, file, callback) => {
-    if (!file.mimetype.startsWith("image/")) {
-      callback(new HttpError(400, "Only image files are allowed"));
-      return;
-    }
-    callback(null, true);
-  },
+  limits: { fileSize: 15 * 1024 * 1024, files: 2 },
 });

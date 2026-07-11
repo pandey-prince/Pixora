@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error.middleware";
+import { cryptoKeyRouter } from "./routes/crypto-key.routes";
 import { photoRouter } from "./routes/photo.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 
@@ -21,5 +22,6 @@ app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.use("/api/crypto", cryptoKeyRouter);
 app.use("/api/photos", photoRouter);
 app.use(errorHandler);

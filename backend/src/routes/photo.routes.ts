@@ -8,5 +8,12 @@ export const photoRouter = Router();
 
 photoRouter.use(requireApiAuth);
 photoRouter.get("/", asyncHandler(listPhotos));
-photoRouter.post("/upload", upload.array("images", 20), asyncHandler(uploadPhotos));
+photoRouter.post(
+  "/upload",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 },
+  ]),
+  asyncHandler(uploadPhotos),
+);
 photoRouter.delete("/:id", asyncHandler(deletePhoto));

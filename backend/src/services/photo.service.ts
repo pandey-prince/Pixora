@@ -1,25 +1,65 @@
 import { prisma } from "../lib/prisma";
 import { HttpError } from "../utils/http-error";
-import { deleteImage, uploadImage } from "./cloudinary.service";
+import {
+  deleteEncryptedAsset,
+  deleteImage,
+  uploadEncryptedBuffer,
+} from "./cloudinary.service";
 
-export const createPhotos = async (userId: string, files: Express.Multer.File[]) => {
-  const uploaded: Array<{ publicId: string; imageUrl: string; fileName: string }> = [];
+export interface EncryptedPhotoInput {
+  imageBuffer: Buffer;
+  thumbBuffer?: Buffer;
+  encryptedKey: string;
+  keyIv: string;
+  contentIv: string;
+  encryptedFileName: string;
+  fileNameIv: string;
+  mimeType: string;
+  thumbIv?: string;
+}
+
+/**
+ * Persist a single already-encrypted photo. The image bytes and thumbnail are
+ * uploaded to Cloudinary as opaque `raw` assets; only wrapped keys and IVs are
+ * stored in the database. If anything fails, uploaded assets are cleaned up so
+ * we never leak orphaned blobs.
+ */
+export const createEncryptedPhoto = async (userId: string, input: EncryptedPhotoInput) => {
+  const uploadedPublicIds: string[] = [];
 
   try {
-    for (const file of files) {
-      const result = await uploadImage(file);
-      uploaded.push({
-        publicId: result.public_id,
-        imageUrl: result.secure_url,
-        fileName: file.originalname,
-      });
+    const image = await uploadEncryptedBuffer(input.imageBuffer);
+    uploadedPublicIds.push(image.public_id);
+
+    let thumbUrl: string | null = null;
+    let thumbPublicId: string | null = null;
+    if (input.thumbBuffer && input.thumbIv) {
+      const thumb = await uploadEncryptedBuffer(input.thumbBuffer, "photo-gallery-encrypted/thumbs");
+      uploadedPublicIds.push(thumb.public_id);
+      thumbUrl = thumb.secure_url;
+      thumbPublicId = thumb.public_id;
     }
 
-    return await prisma.$transaction(
-      uploaded.map((photo) => prisma.photo.create({ data: { ...photo, userId } })),
-    );
+    return await prisma.photo.create({
+      data: {
+        userId,
+        imageUrl: image.secure_url,
+        publicId: image.public_id,
+        fileName: "encrypted",
+        encrypted: true,
+        encryptedKey: input.encryptedKey,
+        keyIv: input.keyIv,
+        contentIv: input.contentIv,
+        encryptedFileName: input.encryptedFileName,
+        fileNameIv: input.fileNameIv,
+        mimeType: input.mimeType,
+        thumbUrl,
+        thumbPublicId,
+        thumbIv: input.thumbIv ?? null,
+      },
+    });
   } catch (error) {
-    await Promise.allSettled(uploaded.map((photo) => deleteImage(photo.publicId)));
+    await Promise.allSettled(uploadedPublicIds.map((id) => deleteEncryptedAsset(id)));
     throw error;
   }
 };
@@ -45,6 +85,12 @@ export const removePhoto = async (userId: string, photoId: string) => {
   const photo = await prisma.photo.findFirst({ where: { id: photoId, userId } });
   if (!photo) throw new HttpError(404, "Photo not found");
 
-  await deleteImage(photo.publicId);
+  if (photo.encrypted) {
+    await deleteEncryptedAsset(photo.publicId);
+    if (photo.thumbPublicId) await deleteEncryptedAsset(photo.thumbPublicId);
+  } else {
+    await deleteImage(photo.publicId);
+  }
+
   await prisma.photo.delete({ where: { id: photo.id } });
 };

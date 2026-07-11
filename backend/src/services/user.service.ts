@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma";
-import { deleteImage } from "./cloudinary.service";
+import { deleteEncryptedAsset, deleteImage } from "./cloudinary.service";
 
 export interface ClerkUserPayload {
   id?: string;
@@ -38,10 +38,19 @@ export const deleteClerkUser = async (clerkId?: string) => {
   if (!clerkId) return;
   const user = await prisma.user.findUnique({
     where: { clerkId },
-    include: { photos: { select: { publicId: true } } },
+    include: {
+      photos: { select: { publicId: true, thumbPublicId: true, encrypted: true } },
+    },
   });
   if (!user) return;
 
-  await Promise.allSettled(user.photos.map((photo) => deleteImage(photo.publicId)));
+  await Promise.allSettled(
+    user.photos.flatMap((photo) => {
+      if (!photo.encrypted) return [deleteImage(photo.publicId)];
+      const jobs = [deleteEncryptedAsset(photo.publicId)];
+      if (photo.thumbPublicId) jobs.push(deleteEncryptedAsset(photo.thumbPublicId));
+      return jobs;
+    }),
+  );
   await prisma.user.delete({ where: { id: user.id } });
 };

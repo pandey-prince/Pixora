@@ -15,6 +15,19 @@ model User {
   lastName  String?
   createdAt DateTime @default(now())
   photos    Photo[]
+
+  // End-to-end encryption key material (zero-knowledge).
+  // The master key is generated in the browser and wrapped by a key that is
+  // derived from the user's passphrase. The server only ever stores ciphertext.
+  encryptedMasterKey String? // base64 AES-GCM ciphertext of the raw master key
+  masterKeySalt      String? // base64 salt fed into the KDF
+  masterKeyIv        String? // base64 IV used to wrap the master key
+  kdf                String? // JSON describing the KDF algorithm + parameters
+
+  // Optional recovery-code copy of the master key.
+  recoveryWrappedKey String?
+  recoverySalt       String?
+  recoveryIv         String?
 }
 
 model Photo {
@@ -25,6 +38,19 @@ model Photo {
   uploadedAt DateTime @default(now())
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Encryption metadata. Legacy plaintext photos keep `encrypted = false` and
+  // leave these columns null so they can still be displayed during migration.
+  encrypted         Boolean @default(true)
+  encryptedKey      String? // base64 per-photo data key (DEK), wrapped by the master key
+  keyIv             String? // base64 IV used to wrap the DEK
+  contentIv         String? // base64 IV used to encrypt the image bytes
+  encryptedFileName String? // base64 AES-GCM ciphertext of the original file name
+  fileNameIv        String? // base64 IV used to encrypt the file name
+  mimeType          String? // original MIME type, needed to rebuild the decrypted blob
+  thumbUrl          String? // Cloudinary raw URL of the encrypted thumbnail
+  thumbPublicId     String? // Cloudinary public id of the encrypted thumbnail
+  thumbIv           String? // base64 IV used to encrypt the thumbnail bytes
 
   @@index([userId, uploadedAt])
 }
