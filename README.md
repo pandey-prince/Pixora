@@ -112,12 +112,35 @@ Frontend:
 | Method | Route | Description |
 | --- | --- | --- |
 | `POST` | `/clerk/webhook` | Sync Clerk users, verified with Svix |
-| `POST` | `/api/photos/upload` | Upload up to 20 images under the `images` field |
+| `GET` | `/api/crypto/keys` | Fetch the caller's wrapped master key material |
+| `POST` | `/api/crypto/keys` | Store the wrapped master key during first-time setup |
+| `PUT` | `/api/crypto/keys` | Rotate the passphrase by re-wrapping the master key |
+| `POST` | `/api/photos/upload` | Upload one encrypted photo (`image`, optional `thumbnail`, and JSON `metadata` fields) |
 | `GET` | `/api/photos?page=1&limit=24` | List the authenticated user's photos |
 | `DELETE` | `/api/photos/:id` | Delete an owned photo |
 | `GET` | `/health` | Health check |
 
-All `/api/photos` routes require a Clerk bearer token.
+All `/api/photos` and `/api/crypto` routes require a Clerk bearer token.
+
+## End-to-end encryption
+
+Photos are encrypted in the browser before upload and only decrypted in the
+browser, so the backend, database, and Cloudinary only ever store ciphertext.
+
+- A user passphrase (never sent to the server) is stretched with Argon2id into a
+  key-encryption key (KEK).
+- A random per-user master key is wrapped by the KEK and stored on the server.
+  Rotating the passphrase only re-wraps the master key; photos are untouched.
+- Each photo gets a random AES-256-GCM data key that encrypts the image bytes,
+  thumbnail, and file name; the data key is wrapped by the master key.
+- Encrypted blobs are stored in Cloudinary as `raw` assets. Because the data is
+  opaque, Cloudinary transformations do not apply and thumbnails are generated
+  and encrypted on the client instead.
+- An optional recovery code wraps a second copy of the master key. Losing both
+  the passphrase and the recovery code makes the photos unrecoverable by design.
+
+Run `bunx prisma migrate deploy` to apply the encryption schema before using the
+updated app.
 
 ## Production Deployment
 
@@ -147,7 +170,8 @@ Publish `frontend/dist`, configure both frontend environment variables, and add 
 
 ## Operational Notes
 
-- Uploads are held in memory and limited to 20 files of 10 MB each.
+- Each upload request carries one encrypted photo (the image plus an optional
+  encrypted thumbnail), held in memory and limited to 15 MB per file.
 - Cloudinary assets are cleaned up if database creation fails.
 - Deleting a Clerk user attempts to remove their Cloudinary assets before PostgreSQL cascades photo records.
 - The Prisma client uses the required Prisma 7 `PrismaPg` driver adapter.

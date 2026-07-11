@@ -26,7 +26,9 @@ export const GalleryPage = () => {
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const handleDelete = async (photo: Photo) => {
-    if (!window.confirm(`Delete "${photo.fileName}"? This cannot be undone.`)) return;
+    const displayName =
+      photo.encrypted && masterKey ? await resolveFileName(masterKey, photo) : photo.fileName;
+    if (!window.confirm(`Delete "${displayName}"? This cannot be undone.`)) return;
     setDeletingId(photo.id);
     setActionError("");
     try {
