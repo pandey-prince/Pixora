@@ -103,6 +103,13 @@ const RecoveryAckScreen = () => {
   );
 };
 
+const AccountHint = () => {
+  const { user } = useUser();
+  const email = user?.primaryEmailAddress?.emailAddress;
+  if (!email) return null;
+  return <p className="mt-2 text-xs text-slate-400">Signed in as {email}</p>;
+};
+
 const SetupForm = ({ onBrowse, embedded }: { onBrowse: boolean; embedded?: boolean }) => {
   const { setup } = useCrypto();
   const [passphrase, setPassphrase] = useState("");
@@ -138,6 +145,7 @@ const SetupForm = ({ onBrowse, embedded }: { onBrowse: boolean; embedded?: boole
         <ShieldCheck size={22} />
       </div>
       <h1 className="text-xl font-black tracking-tight">Set up encryption</h1>
+      <AccountHint />
       <p className="mt-2 text-sm text-slate-500">
         Pick a passphrase of at least {MIN_PASSPHRASE_LENGTH} characters. Everything is encrypted in
         your browser before upload and never leaves your device.
