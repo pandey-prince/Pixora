@@ -4,12 +4,12 @@ A full-stack, private photo gallery built with React, TypeScript, Vite, Tailwind
 
 **Live demo:** [pixora-photogallery.vercel.app](https://pixora-photogallery.vercel.app/)
 
-![Pixora home](docs/pixora-home.png)
+![Pixora home](https://pixora-photogallery.vercel.app/favicon.svg)
 
 ## Structure
 
 ```text
-photo-gallery/
+pixora/
 ├── backend/
 │   ├── prisma/
 │   └── src/
@@ -63,12 +63,12 @@ Subscribe it to `user.created`, `user.updated`, and `user.deleted`, then put its
 
 5. Add your Neon connection string to `DATABASE_URL`. Use a direct PostgreSQL connection string compatible with `pg`, with `sslmode=require`.
 
-6. Generate Prisma Client and create the database tables.
+6. Generate Prisma Client and apply migrations.
 
 ```bash
 cd backend
 bunx prisma generate
-bunx prisma migrate dev --name init
+bunx prisma migrate deploy
 ```
 
 7. Start both applications in separate terminals.
@@ -93,6 +93,7 @@ Backend:
 | --- | --- |
 | `DATABASE_URL` | Neon PostgreSQL connection string |
 | `CLERK_SECRET_KEY` | Clerk backend secret |
+| `CLERK_PUBLISHABLE_KEY` | Clerk publishable key (required by Clerk middleware) |
 | `WEBHOOK_SECRET` | Clerk/Svix webhook signing secret |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
@@ -136,8 +137,9 @@ browser, so the backend, database, and Cloudinary only ever store ciphertext.
 - Encrypted blobs are stored in Cloudinary as `raw` assets. Because the data is
   opaque, Cloudinary transformations do not apply and thumbnails are generated
   and encrypted on the client instead.
-- An optional recovery code wraps a second copy of the master key. Losing both
-  the passphrase and the recovery code makes the photos unrecoverable by design.
+- An optional recovery code wraps a second copy of the master key. Use it on the
+  unlock screen if you forget your passphrase. Losing both the passphrase and the
+  recovery code makes the photos unrecoverable by design.
 
 Run `bunx prisma migrate deploy` to apply the encryption schema before using the
 updated app.
@@ -173,5 +175,5 @@ Publish `frontend/dist`, configure both frontend environment variables, and add 
 - Each upload request carries one encrypted photo (the image plus an optional
   encrypted thumbnail), held in memory and limited to 15 MB per file.
 - Cloudinary assets are cleaned up if database creation fails.
-- Deleting a Clerk user attempts to remove their Cloudinary assets before PostgreSQL cascades photo records.
+- Deleting a Clerk user removes database rows first, then attempts Cloudinary cleanup.
 - The Prisma client uses the required Prisma 7 `PrismaPg` driver adapter.

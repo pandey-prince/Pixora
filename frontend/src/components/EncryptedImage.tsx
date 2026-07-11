@@ -1,29 +1,11 @@
 import { ImageOff, Loader2 } from "lucide-react";
+import { useUser } from "@clerk/react";
 import { useEffect, useState } from "react";
 import { decryptFromUrl, decryptFileName, type MasterKey } from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
 import type { Photo } from "../types/photo";
 
-/**
- * Decrypted object URLs are cached so scrolling through the gallery does not
- * re-download and re-decrypt the same photo repeatedly. The cache is bounded;
- * evicted entries have their object URLs revoked to free memory.
- */
-const MAX_CACHE = 200;
-const urlCache = new Map<string, string>();
-
-const cacheKey = (photoId: string, variant: Variant) => `${photoId}:${variant}`;
-
-const putInCache = (key: string, url: string) => {
-  urlCache.set(key, url);
-  while (urlCache.size > MAX_CACHE) {
-    const oldestKey = urlCache.keys().next().value as string | undefined;
-    if (oldestKey === undefined) break;
-    const oldestUrl = urlCache.get(oldestKey);
-    urlCache.delete(oldestKey);
-    if (oldestUrl && oldestUrl !== url) URL.revokeObjectURL(oldestUrl);
-  }
-};
+import { cacheKey, getCachedUrl, putInCache } from "../lib/decryption-cache";
 
 type Variant = "thumb" | "full";
 
@@ -52,9 +34,11 @@ export const decryptPhotoBlob = async (
 
 const useObjectUrl = (photo: Photo, variant: Variant) => {
   const { masterKey } = useCrypto();
+  const { user } = useUser();
+  const userId = user?.id ?? "anonymous";
   const [url, setUrl] = useState<string | null>(() => {
     if (!photo.encrypted) return photo.imageUrl;
-    return urlCache.get(cacheKey(photo.id, variant)) ?? null;
+    return getCachedUrl(cacheKey(userId, photo.id, variant));
   });
   const [failed, setFailed] = useState(false);
 
@@ -65,8 +49,8 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
         if (!cancelled) setUrl(photo.imageUrl);
         return;
       }
-      const key = cacheKey(photo.id, variant);
-      const cached = urlCache.get(key);
+      const key = cacheKey(userId, photo.id, variant);
+      const cached = getCachedUrl(key);
       if (cached) {
         if (!cancelled) setUrl(cached);
         return;
@@ -88,7 +72,7 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
     return () => {
       cancelled = true;
     };
-  }, [photo, variant, masterKey]);
+  }, [photo, variant, masterKey, userId]);
 
   return { url, failed };
 };
@@ -106,7 +90,12 @@ export const EncryptedImage = ({ photo, variant = "thumb", alt, className, onCli
 
   if (failed) {
     return (
-      <div className={`grid place-items-center bg-slate-100 text-slate-400 ${className ?? ""}`} onClick={onClick}>
+      <div
+        role="img"
+        aria-label={`${alt} could not be decrypted`}
+        className={`grid place-items-center bg-slate-100 text-slate-400 ${className ?? ""}`}
+        onClick={onClick}
+      >
         <ImageOff size={22} />
       </div>
     );
@@ -114,7 +103,11 @@ export const EncryptedImage = ({ photo, variant = "thumb", alt, className, onCli
 
   if (!url) {
     return (
-      <div className={`grid place-items-center bg-slate-100 text-slate-300 ${className ?? ""}`}>
+      <div
+        aria-busy="true"
+        aria-label={`Decrypting ${alt}`}
+        className={`grid place-items-center bg-slate-100 text-slate-300 ${className ?? ""}`}
+      >
         <Loader2 size={20} className="animate-spin" />
       </div>
     );

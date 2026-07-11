@@ -35,6 +35,27 @@ export const DEFAULT_KDF: KdfParams = {
   hashLength: 32,
 };
 
+const MAX_KDF_MEMORY_KIB = 131072;
+const MAX_KDF_ITERATIONS = 10;
+
+export const MIN_PASSPHRASE_LENGTH = 12;
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
+export const validatePassphrase = (passphrase: string): string | null => {
+  if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
+    return `Use at least ${MIN_PASSPHRASE_LENGTH} characters.`;
+  }
+  return null;
+};
+
+const clampKdf = (params: KdfParams): KdfParams => ({
+  type: "argon2id",
+  memoryKiB: Math.min(Math.max(params.memoryKiB, 16384), MAX_KDF_MEMORY_KIB),
+  iterations: Math.min(Math.max(params.iterations, 1), MAX_KDF_ITERATIONS),
+  parallelism: Math.min(Math.max(params.parallelism, 1), 4),
+  hashLength: 32,
+});
+
 // --- encoding helpers -------------------------------------------------------
 
 export const randomBytes = (length: number): Uint8Array =>
@@ -165,11 +186,16 @@ export const wrapMasterKey = async (
 const parseKdf = (raw: string): KdfParams => {
   try {
     const parsed = JSON.parse(raw) as Partial<KdfParams>;
-    if (parsed && parsed.type === "argon2id") return { ...DEFAULT_KDF, ...parsed };
+    if (parsed && parsed.type === "argon2id") return clampKdf({ ...DEFAULT_KDF, ...parsed });
   } catch {
     /* fall through to default */
   }
   return DEFAULT_KDF;
+};
+
+/** Best-effort wipe of raw key bytes from memory. */
+export const zeroMasterKey = (master: MasterKey | null) => {
+  if (master?.raw) master.raw.fill(0);
 };
 
 /**
@@ -183,6 +209,24 @@ export const unwrapMasterKey = async (
   const params = parseKdf(wrapped.kdf);
   const kek = await deriveKek(passphrase, fromBase64(wrapped.masterKeySalt), params);
   const raw = await open(kek, fromBase64(wrapped.masterKeyIv), fromBase64(wrapped.encryptedMasterKey));
+  return { raw, key: await importAesKey(raw) };
+};
+
+/** Unlock the master key using the recovery code instead of the passphrase. */
+export const unwrapMasterKeyWithRecovery = async (
+  recoveryCode: string,
+  wrapped: Pick<WrappedMasterKey, "recoveryWrappedKey" | "recoverySalt" | "recoveryIv" | "kdf">,
+): Promise<MasterKey> => {
+  if (!wrapped.recoveryWrappedKey || !wrapped.recoverySalt || !wrapped.recoveryIv) {
+    throw new Error("Recovery is not available for this account");
+  }
+  const params = parseKdf(wrapped.kdf);
+  const kek = await deriveKek(recoveryCode.trim().toUpperCase(), fromBase64(wrapped.recoverySalt), params);
+  const raw = await open(
+    kek,
+    fromBase64(wrapped.recoveryIv),
+    fromBase64(wrapped.recoveryWrappedKey),
+  );
   return { raw, key: await importAesKey(raw) };
 };
 

@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/react";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { encryptPhoto } from "../lib/crypto";
+import { encryptPhoto, MAX_UPLOAD_BYTES } from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
@@ -29,6 +29,11 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     setError("");
     const images = files.filter((file) => file.type.startsWith("image/"));
     if (images.length !== files.length) setError("Only image files can be uploaded.");
+    const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
+    if (oversized) {
+      setError(`"${oversized.name}" exceeds the 15 MB limit.`);
+      return;
+    }
     setSelected((current) => [
       ...current,
       ...images.slice(0, Math.max(0, 20 - current.length)).map((file) => ({
@@ -107,7 +112,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
         <div>
           <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} />
           <p className="font-semibold text-slate-800">Drop photos here or click to browse</p>
-          <p className="mt-1 text-xs text-slate-500">Up to 20 images, 10 MB each</p>
+          <p className="mt-1 text-xs text-slate-500">Up to 20 images, 15 MB each</p>
         </div>
       </div>
 

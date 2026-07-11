@@ -15,7 +15,7 @@ const api = axios.create({
 const authHeader = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 export const photoApi = {
-  list: async (token: string, page = 1, limit = 20) => {
+  list: async (token: string, page = 1, limit = 24) => {
     const response = await api.get<PhotoPage>("/api/photos", {
       params: { page, limit },
       headers: authHeader(token),

@@ -6,6 +6,7 @@ import { errorHandler } from "./middleware/error.middleware";
 import { cryptoKeyRouter } from "./routes/crypto-key.routes";
 import { photoRouter } from "./routes/photo.routes";
 import { webhookRouter } from "./routes/webhook.routes";
+import { prisma } from "./lib/prisma";
 
 export const app = express();
 
@@ -17,11 +18,18 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: "*" }));
-//app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "connected" });
+  } catch {
+    res.status(503).json({ status: "degraded", database: "unreachable" });
+  }
+});
+
 app.use("/api/crypto", cryptoKeyRouter);
 app.use("/api/photos", photoRouter);
 app.use(errorHandler);

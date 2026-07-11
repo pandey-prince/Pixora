@@ -50,6 +50,9 @@ export interface KeyStatus {
   masterKeySalt?: string;
   masterKeyIv?: string;
   kdf?: string;
+  recoveryWrappedKey?: string;
+  recoverySalt?: string;
+  recoveryIv?: string;
 }
 
 export interface WrappedKeyPayload {

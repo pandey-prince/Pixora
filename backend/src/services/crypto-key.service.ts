@@ -24,6 +24,9 @@ export interface KeyStatus {
   masterKeySalt?: string;
   masterKeyIv?: string;
   kdf?: string;
+  recoveryWrappedKey?: string;
+  recoverySalt?: string;
+  recoveryIv?: string;
 }
 
 export const getKeyStatus = async (userId: string): Promise<KeyStatus> => {
@@ -35,6 +38,8 @@ export const getKeyStatus = async (userId: string): Promise<KeyStatus> => {
       masterKeyIv: true,
       kdf: true,
       recoveryWrappedKey: true,
+      recoverySalt: true,
+      recoveryIv: true,
     },
   });
 
@@ -42,13 +47,22 @@ export const getKeyStatus = async (userId: string): Promise<KeyStatus> => {
     return { initialized: false, hasRecovery: false };
   }
 
+  const hasRecovery = Boolean(user.recoveryWrappedKey && user.recoverySalt && user.recoveryIv);
+
   return {
     initialized: true,
-    hasRecovery: Boolean(user.recoveryWrappedKey),
+    hasRecovery,
     encryptedMasterKey: user.encryptedMasterKey,
     masterKeySalt: user.masterKeySalt,
     masterKeyIv: user.masterKeyIv,
     kdf: user.kdf,
+    ...(hasRecovery
+      ? {
+          recoveryWrappedKey: user.recoveryWrappedKey!,
+          recoverySalt: user.recoverySalt!,
+          recoveryIv: user.recoveryIv!,
+        }
+      : {}),
   };
 };
 
@@ -60,22 +74,14 @@ const assertPayload = (payload: WrappedKeyPayload) => {
 };
 
 /**
- * First-time setup. Refuses to overwrite an existing master key so a second
- * device cannot silently lock the user out of previously encrypted photos.
+ * First-time setup. Uses a conditional update so two concurrent requests cannot
+ * both overwrite each other's master key.
  */
 export const initializeKeys = async (userId: string, payload: WrappedKeyPayload) => {
   assertPayload(payload);
 
-  const existing = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { encryptedMasterKey: true },
-  });
-  if (existing?.encryptedMasterKey) {
-    throw new HttpError(409, "Encryption is already set up for this account");
-  }
-
-  await prisma.user.update({
-    where: { id: userId },
+  const updated = await prisma.user.updateMany({
+    where: { id: userId, encryptedMasterKey: null },
     data: {
       encryptedMasterKey: payload.encryptedMasterKey,
       masterKeySalt: payload.masterKeySalt,
@@ -86,34 +92,50 @@ export const initializeKeys = async (userId: string, payload: WrappedKeyPayload)
       recoveryIv: payload.recoveryIv ?? null,
     },
   });
+
+  if (updated.count === 0) {
+    throw new HttpError(409, "Encryption is already set up for this account");
+  }
 };
 
 /**
- * Passphrase rotation. The same master key is re-wrapped by a key derived from
- * the new passphrase, so already-encrypted photos stay readable without any
- * re-encryption of image data.
+ * Passphrase rotation. Omitted recovery fields are preserved so rotation does
+ * not silently delete an existing recovery code.
  */
 export const rotateKeys = async (userId: string, payload: WrappedKeyPayload) => {
   assertPayload(payload);
 
   const existing = await prisma.user.findUnique({
     where: { id: userId },
-    select: { encryptedMasterKey: true },
+    select: {
+      encryptedMasterKey: true,
+      recoveryWrappedKey: true,
+      recoverySalt: true,
+      recoveryIv: true,
+    },
   });
   if (!existing?.encryptedMasterKey) {
     throw new HttpError(409, "Encryption has not been set up yet");
   }
 
-  await prisma.user.update({
+  const data: Record<string, string | null> = {
+    encryptedMasterKey: payload.encryptedMasterKey,
+    masterKeySalt: payload.masterKeySalt,
+    masterKeyIv: payload.masterKeyIv,
+    kdf: payload.kdf,
+  };
+
+  if (payload.recoveryWrappedKey !== undefined) data.recoveryWrappedKey = payload.recoveryWrappedKey;
+  if (payload.recoverySalt !== undefined) data.recoverySalt = payload.recoverySalt;
+  if (payload.recoveryIv !== undefined) data.recoveryIv = payload.recoveryIv;
+
+  await prisma.user.update({ where: { id: userId }, data });
+};
+
+export const userHasEncryptionKeys = async (userId: string): Promise<boolean> => {
+  const user = await prisma.user.findUnique({
     where: { id: userId },
-    data: {
-      encryptedMasterKey: payload.encryptedMasterKey,
-      masterKeySalt: payload.masterKeySalt,
-      masterKeyIv: payload.masterKeyIv,
-      kdf: payload.kdf,
-      recoveryWrappedKey: payload.recoveryWrappedKey ?? null,
-      recoverySalt: payload.recoverySalt ?? null,
-      recoveryIv: payload.recoveryIv ?? null,
-    },
+    select: { encryptedMasterKey: true },
   });
+  return Boolean(user?.encryptedMasterKey);
 };

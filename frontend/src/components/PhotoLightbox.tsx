@@ -1,5 +1,5 @@
 import { Download, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { EncryptedImage, useDecryptedName } from "./EncryptedImage";
 import type { Photo } from "../types/photo";
 
@@ -11,8 +11,10 @@ interface PhotoLightboxProps {
 
 export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps) => {
   const fileName = useDecryptedName(photo);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    closeRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
@@ -28,8 +30,15 @@ export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
       onClick={onClose}
+      role="presentation"
     >
-      <div className="w-full max-w-6xl" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="w-full max-w-6xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Viewing ${fileName}`}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between text-white">
           <div>
             <p className="text-sm font-semibold">{fileName}</p>
@@ -45,6 +54,7 @@ export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps
               Download
             </button>
             <button
+              ref={closeRef}
               type="button"
               onClick={onClose}
               className="rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25"

@@ -5,6 +5,7 @@ import {
   deleteImage,
   uploadEncryptedBuffer,
 } from "./cloudinary.service";
+import { userHasEncryptionKeys } from "./crypto-key.service";
 
 export interface EncryptedPhotoInput {
   imageBuffer: Buffer;
@@ -18,6 +19,23 @@ export interface EncryptedPhotoInput {
   thumbIv?: string;
 }
 
+const cleanupAssets = async (photo: {
+  encrypted: boolean;
+  publicId: string;
+  thumbPublicId: string | null;
+}) => {
+  try {
+    if (photo.encrypted) {
+      await deleteEncryptedAsset(photo.publicId);
+      if (photo.thumbPublicId) await deleteEncryptedAsset(photo.thumbPublicId);
+    } else {
+      await deleteImage(photo.publicId);
+    }
+  } catch (error) {
+    console.error("Cloudinary cleanup failed for", photo.publicId, error);
+  }
+};
+
 /**
  * Persist a single already-encrypted photo. The image bytes and thumbnail are
  * uploaded to Cloudinary as opaque `raw` assets; only wrapped keys and IVs are
@@ -25,6 +43,10 @@ export interface EncryptedPhotoInput {
  * we never leak orphaned blobs.
  */
 export const createEncryptedPhoto = async (userId: string, input: EncryptedPhotoInput) => {
+  if (!(await userHasEncryptionKeys(userId))) {
+    throw new HttpError(409, "Set up encryption before uploading photos");
+  }
+
   const uploadedPublicIds: string[] = [];
 
   try {
@@ -85,12 +107,6 @@ export const removePhoto = async (userId: string, photoId: string) => {
   const photo = await prisma.photo.findFirst({ where: { id: photoId, userId } });
   if (!photo) throw new HttpError(404, "Photo not found");
 
-  if (photo.encrypted) {
-    await deleteEncryptedAsset(photo.publicId);
-    if (photo.thumbPublicId) await deleteEncryptedAsset(photo.thumbPublicId);
-  } else {
-    await deleteImage(photo.publicId);
-  }
-
   await prisma.photo.delete({ where: { id: photo.id } });
+  await cleanupAssets(photo);
 };

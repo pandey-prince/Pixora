@@ -5,3 +5,5 @@ dist/
 backend/src/generated/
 *.log
 .DS_Store
+**/deploy-check.err
+backend/package-lock.json
