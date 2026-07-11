@@ -4,7 +4,7 @@ A full-stack, private photo gallery built with React, TypeScript, Vite, Tailwind
 
 **Live demo:** [pixora-photogallery.vercel.app](https://pixora-photogallery.vercel.app/)
 
-![Pixora home](https://pixora-photogallery.vercel.app/favicon.svg)
+
 
 ## Structure
 
