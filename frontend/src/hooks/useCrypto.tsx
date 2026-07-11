@@ -101,14 +101,20 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
   }, [loadStatus]);
 
   useEffect(() => {
-    if (!isSignedIn) {
+    if (isSignedIn) return;
+    let cancelled = false;
+    void (async () => {
+      if (cancelled) return;
       zeroMasterKey(masterKeyRef.current);
       masterKeyRef.current = null;
       setMasterKey(null);
       clearDecryptionCache();
       setPendingRecoveryCode(null);
       setState("loading");
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isSignedIn]);
 
   const setup = useCallback(

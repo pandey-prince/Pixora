@@ -1,12 +1,13 @@
 import { useAuth, useUser, UserButton } from "@clerk/react";
 import JSZip from "jszip";
-import { Camera, Check, Download, Images, Lock, Sparkles, X } from "lucide-react";
+import { Camera, Check, Download, Images, Lock, Settings, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
 import { GallerySkeleton } from "../components/GallerySkeleton";
 import { InfiniteScrollTrigger } from "../components/InfiniteScrollTrigger";
 import { PhotoLightbox } from "../components/PhotoLightbox";
+import { SecuritySettingsModal } from "../components/SecuritySettingsModal";
 import { UploadPanel } from "../components/UploadPanel";
 import { decryptPhotoBlob, resolveFileName } from "../components/EncryptedImage";
 import { useCrypto } from "../hooks/useCrypto";
@@ -17,13 +18,18 @@ import type { Photo } from "../types/photo";
 export const GalleryPage = () => {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { masterKey, lock } = useCrypto();
+  const { masterKey, lock, state: cryptoState } = useCrypto();
   const { photos, isLoading, isLoadingMore, hasMore, error, reload, loadMore, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
   const [actionError, setActionError] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoomedPhoto, setZoomedPhoto] = useState<Photo | null>(null);
-  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [showSecurity, setShowSecurity] = useState(false);
+  const activeSelectedIds = useMemo(
+    () => selectedIds.filter((id) => photos.some((photo) => photo.id === id)),
+    [selectedIds, photos],
+  );
+  const selectedIdSet = useMemo(() => new Set(activeSelectedIds), [activeSelectedIds]);
 
   const handleDelete = async (photo: Photo) => {
     const displayName =
@@ -47,10 +53,6 @@ export const GalleryPage = () => {
     () => photos.filter((photo) => selectedIdSet.has(photo.id)),
     [photos, selectedIdSet],
   );
-
-  useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => photos.some((photo) => photo.id === id)));
-  }, [photos]);
 
   const toggleSelect = (photo: Photo) => {
     setSelectedIds((current) =>
@@ -150,6 +152,16 @@ export const GalleryPage = () => {
               <Lock size={14} className="text-violet-500" />
               Lock
             </button>
+            {cryptoState === "unlocked" && (
+              <button
+                type="button"
+                onClick={() => setShowSecurity(true)}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Settings size={14} className="text-violet-500" />
+                Security
+              </button>
+            )}
             <UserButton />
           </div>
         </div>
@@ -229,6 +241,7 @@ export const GalleryPage = () => {
           onDownload={() => void downloadPhoto(zoomedPhoto)}
         />
       )}
+      {showSecurity && <SecuritySettingsModal onClose={() => setShowSecurity(false)} />}
     </main>
   );
 };

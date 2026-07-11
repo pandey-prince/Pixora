@@ -9,15 +9,41 @@ interface PhotoLightboxProps {
   onDownload: () => void;
 }
 
+const FOCUSABLE =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps) => {
   const fileName = useDecryptedName(photo);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     closeRef.current?.focus();
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((element) => !element.hasAttribute("disabled"));
+
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+
     window.addEventListener("keydown", onKeyDown);
     document.body.style.overflow = "hidden";
     return () => {
@@ -33,6 +59,7 @@ export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps
       role="presentation"
     >
       <div
+        ref={dialogRef}
         className="w-full max-w-6xl"
         role="dialog"
         aria-modal="true"

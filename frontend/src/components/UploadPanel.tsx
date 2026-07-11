@@ -1,9 +1,9 @@
 import { useAuth } from "@clerk/react";
 import { ImagePlus, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { encryptPhoto, MAX_UPLOAD_BYTES } from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
-import { getApiError, photoApi } from "../services/api";
+import { photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
 
 interface UploadPanelProps {
@@ -19,14 +19,18 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const { getToken } = useAuth();
   const { masterKey } = useCrypto();
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
+  const hintId = useId();
   const [selected, setSelected] = useState<SelectedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [partialSuccess, setPartialSuccess] = useState("");
 
   const addFiles = (files: File[]) => {
     setError("");
+    setPartialSuccess("");
     const images = files.filter((file) => file.type.startsWith("image/"));
     if (images.length !== files.length) setError("Only image files can be uploaded.");
     const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
@@ -58,36 +62,67 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     }
     setIsUploading(true);
     setError("");
+    setPartialSuccess("");
     setProgress(0);
-    try {
-      const token = await getToken();
-      if (!token) throw new Error("Not authenticated");
 
-      const total = selected.length;
-      const uploaded: Photo[] = [];
-      for (let index = 0; index < total; index += 1) {
-        // Encrypt the image, thumbnail, and file name in the browser first, so
-        // only ciphertext ever leaves the device.
-        const encrypted = await encryptPhoto(masterKey, selected[index]!.file);
+    const token = await getToken();
+    if (!token) {
+      setError("Not authenticated");
+      setIsUploading(false);
+      return;
+    }
+
+    const total = selected.length;
+    const uploaded: Photo[] = [];
+    const failed: SelectedFile[] = [];
+
+    for (let index = 0; index < total; index += 1) {
+      const item = selected[index]!;
+      try {
+        const encrypted = await encryptPhoto(masterKey, item.file);
         const photo = await photoApi.upload(token, encrypted, (fileProgress) => {
           setProgress(Math.round(((index + fileProgress / 100) / total) * 100));
         });
         uploaded.push(photo);
+        URL.revokeObjectURL(item.preview);
+      } catch {
+        failed.push(item);
       }
-
-      onUploaded(uploaded);
-      selected.forEach(({ preview }) => URL.revokeObjectURL(preview));
-      setSelected([]);
-    } catch (uploadError) {
-      setError(getApiError(uploadError));
-    } finally {
-      setIsUploading(false);
     }
+
+    if (uploaded.length > 0) onUploaded(uploaded);
+
+    if (failed.length === 0) {
+      setSelected([]);
+    } else {
+      setSelected(failed);
+      const names = failed.map(({ file }) => file.name).join(", ");
+      if (uploaded.length > 0) {
+        setPartialSuccess(`${uploaded.length} photo${uploaded.length > 1 ? "s" : ""} uploaded.`);
+        setError(`Failed to upload: ${names}. Fix the issue and retry the remaining files.`);
+      } else {
+        setError(`Upload failed for: ${names}`);
+      }
+    }
+
+    setIsUploading(false);
   };
+
+  const openFilePicker = () => inputRef.current?.click();
 
   return (
     <section className="mb-10 rounded-[2rem] border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
       <div
+        role="button"
+        tabIndex={0}
+        aria-labelledby={inputId}
+        aria-describedby={hintId}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openFilePicker();
+          }
+        }}
         onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setIsDragging(false)}
@@ -99,10 +134,11 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
         className={`grid min-h-28 cursor-pointer place-items-center rounded-[1.4rem] border border-dashed p-5 text-center transition ${
           isDragging ? "border-violet-500 bg-violet-50" : "border-slate-300 bg-slate-50/60 hover:border-violet-400 hover:bg-violet-50/50"
         }`}
-        onClick={() => inputRef.current?.click()}
+        onClick={openFilePicker}
       >
         <input
           ref={inputRef}
+          id={inputId}
           hidden
           type="file"
           accept="image/*"
@@ -110,9 +146,9 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
         />
         <div>
-          <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} />
+          <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} aria-hidden />
           <p className="font-semibold text-slate-800">Drop photos here or click to browse</p>
-          <p className="mt-1 text-xs text-slate-500">Up to 20 images, 15 MB each</p>
+          <p id={hintId} className="mt-1 text-xs text-slate-500">Up to 20 images, 15 MB each</p>
         </div>
       </div>
 
@@ -150,6 +186,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           )}
         </div>
       )}
+      {partialSuccess && <p className="mt-3 text-sm text-emerald-600">{partialSuccess}</p>}
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     </section>
   );

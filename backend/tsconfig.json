@@ -10,5 +10,6 @@
     "types": ["node"],
     "outDir": "dist"
   },
-  "include": ["src", "prisma.config.ts"]
+  "include": ["src", "prisma.config.ts"],
+  "exclude": ["src/**/*.test.ts"]
 }

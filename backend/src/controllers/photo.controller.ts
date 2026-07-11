@@ -1,44 +1,7 @@
 import type { Request, Response } from "express";
+import { parseUploadMetadata } from "../schemas/upload.schema";
 import { createEncryptedPhoto, getPhotos, removePhoto } from "../services/photo.service";
 import { HttpError } from "../utils/http-error";
-
-interface UploadMetadata {
-  encryptedKey?: string;
-  keyIv?: string;
-  contentIv?: string;
-  encryptedFileName?: string;
-  fileNameIv?: string;
-  mimeType?: string;
-  thumbIv?: string;
-}
-
-const parseMetadata = (raw: unknown): Required<Omit<UploadMetadata, "thumbIv">> & { thumbIv?: string } => {
-  if (typeof raw !== "string" || raw.length === 0) {
-    throw new HttpError(400, "Missing encryption metadata");
-  }
-
-  let parsed: UploadMetadata;
-  try {
-    parsed = JSON.parse(raw) as UploadMetadata;
-  } catch {
-    throw new HttpError(400, "Invalid encryption metadata");
-  }
-
-  const { encryptedKey, keyIv, contentIv, encryptedFileName, fileNameIv, mimeType } = parsed;
-  if (!encryptedKey || !keyIv || !contentIv || !encryptedFileName || !fileNameIv || !mimeType) {
-    throw new HttpError(400, "Incomplete encryption metadata");
-  }
-
-  return {
-    encryptedKey,
-    keyIv,
-    contentIv,
-    encryptedFileName,
-    fileNameIv,
-    mimeType,
-    thumbIv: parsed.thumbIv,
-  };
-};
 
 export const uploadPhotos = async (req: Request, res: Response) => {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -49,7 +12,10 @@ export const uploadPhotos = async (req: Request, res: Response) => {
     throw new HttpError(400, "Encrypted image is required");
   }
 
-  const metadata = parseMetadata(req.body?.metadata);
+  const metadata = parseUploadMetadata(req.body?.metadata);
+  if (thumbFile && !metadata.thumbIv) {
+    throw new HttpError(400, "thumbIv is required when a thumbnail is uploaded");
+  }
 
   const photo = await createEncryptedPhoto(req.dbUser!.id, {
     imageBuffer: imageFile.buffer,

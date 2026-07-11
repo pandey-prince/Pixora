@@ -6,30 +6,31 @@
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "typecheck": "tsc --noEmit",
+    "test": "bun test src/",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
-    "@clerk/express": "latest",
-    "@prisma/adapter-pg": "latest",
-    "@prisma/client": "latest",
-    "cloudinary": "latest",
-    "cors": "latest",
-    "dotenv": "latest",
-    "express": "latest",
+    "@clerk/express": "^2.1.23",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "cloudinary": "^2.10.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
-    "multer": "latest",
-    "pg": "latest",
-    "svix": "latest",
-    "zod": "latest"
+    "multer": "^2.1.1",
+    "pg": "^8.21.0",
+    "svix": "^1.95.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/cors": "latest",
-    "@types/express": "latest",
-    "@types/multer": "latest",
-    "@types/node": "latest",
-    "prisma": "latest",
-    "typescript": "latest"
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.2",
+    "prisma": "^7.8.0",
+    "typescript": "^6.0.3"
   }
 }
