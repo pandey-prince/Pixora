@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 .env.local
+backend/.env
+frontend/.env
 backend/src/generated/
 backend/.local-uploads/
 *.log
