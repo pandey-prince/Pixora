@@ -165,7 +165,7 @@ export const wrapMasterKey = async (
   recoveryCode?: string,
   params: KdfParams = DEFAULT_KDF,
 ): Promise<WrappedMasterKey> => {
-  const primary = await wrapWithSecret(master.raw, passphrase, params);
+  const primary = await wrapWithSecret(master.raw, passphrase.trim(), params);
   const result: WrappedMasterKey = {
     encryptedMasterKey: primary.wrapped,
     masterKeySalt: primary.salt,
@@ -207,7 +207,7 @@ export const unwrapMasterKey = async (
   wrapped: Pick<WrappedMasterKey, "encryptedMasterKey" | "masterKeySalt" | "masterKeyIv" | "kdf">,
 ): Promise<MasterKey> => {
   const params = parseKdf(wrapped.kdf);
-  const kek = await deriveKek(passphrase, fromBase64(wrapped.masterKeySalt), params);
+  const kek = await deriveKek(passphrase.trim(), fromBase64(wrapped.masterKeySalt), params);
   const raw = await open(kek, fromBase64(wrapped.masterKeyIv), fromBase64(wrapped.encryptedMasterKey));
   return { raw, key: await importAesKey(raw) };
 };

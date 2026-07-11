@@ -1,5 +1,5 @@
 import { AlertTriangle, Copy, Eye, EyeOff, KeyRound, Loader2, Lock, ShieldCheck } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useAuth, useUser } from "@clerk/react";
 import { useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { getApiError, photoApi } from "../services/api";
@@ -230,6 +230,7 @@ const UnlockForm = ({ embedded }: { embedded?: boolean }) => {
         <Lock size={22} />
       </div>
       <h1 className="text-xl font-black tracking-tight">Unlock your gallery</h1>
+      <AccountHint />
       <p className="mt-2 text-sm text-slate-500">
         {mode === "passphrase"
           ? "Enter your encryption passphrase to decrypt your photos on this device."
