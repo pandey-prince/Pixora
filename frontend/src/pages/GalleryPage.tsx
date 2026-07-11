@@ -1,12 +1,15 @@
 import { useAuth, useUser, UserButton } from "@clerk/react";
 import JSZip from "jszip";
-import { Camera, Check, Download, Images, Sparkles, X } from "lucide-react";
+import { Camera, Check, Download, Images, Lock, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
 import { GallerySkeleton } from "../components/GallerySkeleton";
 import { InfiniteScrollTrigger } from "../components/InfiniteScrollTrigger";
+import { PhotoLightbox } from "../components/PhotoLightbox";
 import { UploadPanel } from "../components/UploadPanel";
+import { decryptPhotoBlob, resolveFileName } from "../components/EncryptedImage";
+import { useCrypto } from "../hooks/useCrypto";
 import { usePhotos } from "../hooks/usePhotos";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
@@ -14,6 +17,7 @@ import type { Photo } from "../types/photo";
 export const GalleryPage = () => {
   const { getToken } = useAuth();
   const { user } = useUser();
+  const { masterKey, lock } = useCrypto();
   const { photos, isLoading, isLoadingMore, hasMore, error, reload, loadMore, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
   const [actionError, setActionError] = useState("");
@@ -43,19 +47,6 @@ export const GalleryPage = () => {
   );
 
   useEffect(() => {
-    if (!zoomedPhoto) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setZoomedPhoto(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [zoomedPhoto]);
-
-  useEffect(() => {
     setSelectedIds((current) => current.filter((id) => photos.some((photo) => photo.id === id)));
   }, [photos]);
 
@@ -80,12 +71,25 @@ export const GalleryPage = () => {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   };
 
+  const fetchPhotoBlob = async (photo: Photo): Promise<Blob> => {
+    if (photo.encrypted) {
+      if (!masterKey) throw new Error("Gallery is locked");
+      return decryptPhotoBlob(masterKey, photo, "full");
+    }
+    const response = await fetch(photo.imageUrl);
+    if (!response.ok) throw new Error("Failed to download photo");
+    return response.blob();
+  };
+
+  const fetchPhotoName = async (photo: Photo): Promise<string> => {
+    if (photo.encrypted && masterKey) return resolveFileName(masterKey, photo);
+    return photo.fileName;
+  };
+
   const downloadPhoto = async (photo: Photo) => {
     try {
-      const response = await fetch(photo.imageUrl);
-      if (!response.ok) throw new Error(`Failed to download ${photo.fileName}`);
-      const blob = await response.blob();
-      await downloadBlob(blob, photo.fileName);
+      const [blob, name] = await Promise.all([fetchPhotoBlob(photo), fetchPhotoName(photo)]);
+      await downloadBlob(blob, name);
     } catch (downloadError) {
       setActionError(downloadError instanceof Error ? downloadError.message : "Something went wrong while downloading");
     }
@@ -103,13 +107,11 @@ export const GalleryPage = () => {
       const zip = new JSZip();
       const usedNames = new Map<string, number>();
       for (const photo of selectedPhotos) {
-        const response = await fetch(photo.imageUrl);
-        if (!response.ok) throw new Error(`Failed to download ${photo.fileName}`);
-        const blob = await response.blob();
-        const count = usedNames.get(photo.fileName) ?? 0;
-        usedNames.set(photo.fileName, count + 1);
-        const baseName = photo.fileName.replace(/\.[^.]+$/, "");
-        const extension = photo.fileName.includes(".") ? photo.fileName.split(".").pop() ?? "jpg" : "jpg";
+        const [blob, name] = await Promise.all([fetchPhotoBlob(photo), fetchPhotoName(photo)]);
+        const count = usedNames.get(name) ?? 0;
+        usedNames.set(name, count + 1);
+        const baseName = name.replace(/\.[^.]+$/, "");
+        const extension = name.includes(".") ? name.split(".").pop() ?? "jpg" : "jpg";
         const suffix = count ? `-${count + 1}` : "";
         zip.file(`${baseName}${suffix}.${extension}`, blob);
       }
@@ -138,6 +140,14 @@ export const GalleryPage = () => {
               <Images size={14} className="text-violet-500" />
               {photos.length} loaded
             </div>
+            <button
+              type="button"
+              onClick={lock}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Lock size={14} className="text-violet-500" />
+              Lock
+            </button>
             <UserButton />
           </div>
         </div>
@@ -211,47 +221,11 @@ export const GalleryPage = () => {
       </div>
 
       {zoomedPhoto && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-          onClick={() => setZoomedPhoto(null)}
-        >
-          <div
-            className="w-full max-w-6xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between text-white">
-              <div>
-                <p className="text-sm font-semibold">{zoomedPhoto.fileName}</p>
-                <p className="text-xs text-white/70">Use Escape or click outside to close</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void downloadPhoto(zoomedPhoto)}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/25"
-                >
-                  <Download size={15} />
-                  Download
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setZoomedPhoto(null)}
-                  className="rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25"
-                  aria-label="Close photo viewer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-            <div className="perspective-[1800px]">
-              <img
-                src={zoomedPhoto.imageUrl}
-                alt={zoomedPhoto.fileName}
-                className="animate-photo-pop max-h-[82vh] w-full rounded-[1.75rem] object-contain shadow-2xl shadow-black/40"
-              />
-            </div>
-          </div>
-        </div>
+        <PhotoLightbox
+          photo={zoomedPhoto}
+          onClose={() => setZoomedPhoto(null)}
+          onDownload={() => void downloadPhoto(zoomedPhoto)}
+        />
       )}
     </main>
   );

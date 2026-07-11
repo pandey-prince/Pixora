@@ -1,4 +1,5 @@
 import { CheckSquare, Download, Square, Trash2 } from "lucide-react";
+import { EncryptedImage, useDecryptedName } from "./EncryptedImage";
 import type { Photo } from "../types/photo";
 
 interface PhotoCardProps {
@@ -11,20 +12,23 @@ interface PhotoCardProps {
   onToggleSelect: (photo: Photo) => void;
 }
 
-export const PhotoCard = ({ photo, deleting, selected, onDelete, onDownload, onOpen, onToggleSelect }: PhotoCardProps) => (
+export const PhotoCard = ({ photo, deleting, selected, onDelete, onDownload, onOpen, onToggleSelect }: PhotoCardProps) => {
+  const fileName = useDecryptedName(photo);
+
+  return (
   <article
     className={`group relative aspect-square overflow-hidden rounded-[1.35rem] bg-slate-200 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10 ${selected ? "ring-2 ring-violet-500 ring-offset-2 ring-offset-[#f8f7f4]" : ""}`}
   >
-    <img
-      src={photo.imageUrl}
-      alt={photo.fileName}
-      loading="lazy"
+    <EncryptedImage
+      photo={photo}
+      variant="thumb"
+      alt={fileName}
       onClick={() => onOpen(photo)}
       className="h-full w-full cursor-zoom-in object-cover transition duration-500 group-hover:scale-105"
     />
     <button
       type="button"
-      aria-label={selected ? `Deselect ${photo.fileName}` : `Select ${photo.fileName}`}
+      aria-label={selected ? `Deselect ${fileName}` : `Select ${fileName}`}
       onClick={(event) => {
         event.stopPropagation();
         onToggleSelect(photo);
@@ -34,11 +38,11 @@ export const PhotoCard = ({ photo, deleting, selected, onDelete, onDownload, onO
       {selected ? <CheckSquare size={18} /> : <Square size={18} />}
     </button>
     <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/80 to-transparent p-3 pt-12 opacity-0 transition group-hover:opacity-100">
-      <p className="min-w-0 truncate text-xs font-medium text-white">{photo.fileName}</p>
+      <p className="min-w-0 truncate text-xs font-medium text-white">{fileName}</p>
       <div className="ml-2 flex items-center gap-2">
         <button
           type="button"
-          aria-label={`Download ${photo.fileName}`}
+          aria-label={`Download ${fileName}`}
           onClick={(event) => {
             event.stopPropagation();
             onDownload(photo);
@@ -54,7 +58,7 @@ export const PhotoCard = ({ photo, deleting, selected, onDelete, onDownload, onO
             event.stopPropagation();
             onDelete(photo);
           }}
-          aria-label={`Delete ${photo.fileName}`}
+          aria-label={`Delete ${fileName}`}
           className="rounded-full bg-white/20 p-2 text-white backdrop-blur transition hover:bg-red-500 disabled:opacity-50"
         >
           <Trash2 size={16} />
@@ -62,4 +66,5 @@ export const PhotoCard = ({ photo, deleting, selected, onDelete, onDownload, onO
       </div>
     </div>
   </article>
-);
+  );
+};

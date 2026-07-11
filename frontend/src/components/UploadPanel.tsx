@@ -1,6 +1,8 @@
 import { useAuth } from "@clerk/react";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { encryptPhoto } from "../lib/crypto";
+import { useCrypto } from "../hooks/useCrypto";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
 
@@ -15,6 +17,7 @@ interface SelectedFile {
 
 export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const { getToken } = useAuth();
+  const { masterKey } = useCrypto();
   const inputRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<SelectedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -44,14 +47,30 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
 
   const upload = async () => {
     if (!selected.length) return;
+    if (!masterKey) {
+      setError("Your gallery is locked. Unlock it before uploading.");
+      return;
+    }
     setIsUploading(true);
     setError("");
     setProgress(0);
     try {
       const token = await getToken();
       if (!token) throw new Error("Not authenticated");
-      const photos = await photoApi.upload(token, selected.map(({ file }) => file), setProgress);
-      onUploaded(photos);
+
+      const total = selected.length;
+      const uploaded: Photo[] = [];
+      for (let index = 0; index < total; index += 1) {
+        // Encrypt the image, thumbnail, and file name in the browser first, so
+        // only ciphertext ever leaves the device.
+        const encrypted = await encryptPhoto(masterKey, selected[index]!.file);
+        const photo = await photoApi.upload(token, encrypted, (fileProgress) => {
+          setProgress(Math.round(((index + fileProgress / 100) / total) * 100));
+        });
+        uploaded.push(photo);
+      }
+
+      onUploaded(uploaded);
       selected.forEach(({ preview }) => URL.revokeObjectURL(preview));
       setSelected([]);
     } catch (uploadError) {

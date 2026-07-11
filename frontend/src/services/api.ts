@@ -1,5 +1,11 @@
 import axios from "axios";
-import type { Photo, PhotoPage } from "../types/photo";
+import type {
+  EncryptedUpload,
+  KeyStatus,
+  Photo,
+  PhotoPage,
+  WrappedKeyPayload,
+} from "../types/photo";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -17,20 +23,38 @@ export const photoApi = {
     return response.data;
   },
 
-  upload: async (token: string, files: File[], onProgress: (progress: number) => void) => {
+  upload: async (token: string, upload: EncryptedUpload, onProgress: (progress: number) => void) => {
     const data = new FormData();
-    files.forEach((file) => data.append("images", file));
-    const response = await api.post<{ photos: Photo[] }>("/api/photos/upload", data, {
+    data.append("image", upload.imageBlob, "image.enc");
+    if (upload.thumbBlob) data.append("thumbnail", upload.thumbBlob, "thumb.enc");
+    data.append("metadata", JSON.stringify(upload.metadata));
+
+    const response = await api.post<{ photo: Photo }>("/api/photos/upload", data, {
       headers: authHeader(token),
       onUploadProgress: (event) => {
         if (event.total) onProgress(Math.round((event.loaded * 100) / event.total));
       },
     });
-    return response.data.photos;
+    return response.data.photo;
   },
 
   remove: async (token: string, photoId: string) => {
     await api.delete(`/api/photos/${photoId}`, { headers: authHeader(token) });
+  },
+};
+
+export const cryptoApi = {
+  getKeys: async (token: string) => {
+    const response = await api.get<KeyStatus>("/api/crypto/keys", { headers: authHeader(token) });
+    return response.data;
+  },
+
+  initKeys: async (token: string, payload: WrappedKeyPayload) => {
+    await api.post("/api/crypto/keys", payload, { headers: authHeader(token) });
+  },
+
+  rotateKeys: async (token: string, payload: WrappedKeyPayload) => {
+    await api.put("/api/crypto/keys", payload, { headers: authHeader(token) });
   },
 };
 
