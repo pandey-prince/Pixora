@@ -1,4 +1,4 @@
-import { useAuth, useUser, UserButton } from "@clerk/react";
+import { useAuth, useUser } from "@clerk/react";
 import JSZip from "jszip";
 import { Camera, Check, Download, Images, Lock, Settings, X } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -7,6 +7,7 @@ import { GalleryGrid } from "../components/GalleryGrid";
 import { GallerySkeleton } from "../components/GallerySkeleton";
 import { InfiniteScrollTrigger } from "../components/InfiniteScrollTrigger";
 import { PhotoLightbox } from "../components/PhotoLightbox";
+import { ProfileMenu } from "../components/ProfileMenu";
 import { SecuritySettingsModal } from "../components/SecuritySettingsModal";
 import { UploadPanel } from "../components/UploadPanel";
 import { decryptPhotoBlob, resolveFileName } from "../components/EncryptedImage";
@@ -164,7 +165,7 @@ export const GalleryPage = () => {
                 Security
               </button>
             )}
-            <UserButton />
+            <ProfileMenu />
           </div>
         </div>
       </header>
