@@ -1,3 +1,5 @@
+import { existsSync } from "fs";
+import { readFileSync } from "fs";
 import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import express from "express";
@@ -7,6 +9,7 @@ import { cryptoKeyRouter } from "./routes/crypto-key.routes";
 import { photoRouter } from "./routes/photo.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { prisma } from "./lib/prisma";
+import { isLocalStorage, readLocalAsset } from "./services/cloudinary.service";
 
 export const app = express();
 
@@ -41,9 +44,35 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", database: "connected" });
+    res.json({ status: "ok", database: "connected", storage: isLocalStorage() ? "local" : "cloudinary" });
   } catch {
     res.status(503).json({ status: "degraded", database: "unreachable" });
+  }
+});
+
+app.get("/local-assets/*assetPath", (req, res) => {
+  if (!isLocalStorage()) {
+    res.status(404).end();
+    return;
+  }
+
+  const rawPath = req.params.assetPath;
+  const publicId = Array.isArray(rawPath) ? rawPath.join("/") : rawPath;
+  if (!publicId) {
+    res.status(400).json({ message: "Asset path is required" });
+    return;
+  }
+
+  try {
+    const filePath = readLocalAsset(publicId);
+    if (!existsSync(filePath)) {
+      res.status(404).json({ message: "Asset not found" });
+      return;
+    }
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(readFileSync(filePath));
+  } catch {
+    res.status(400).json({ message: "Invalid asset path" });
   }
 });
 

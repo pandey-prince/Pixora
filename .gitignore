@@ -3,6 +3,7 @@ dist/
 .env
 .env.local
 backend/src/generated/
+backend/.local-uploads/
 *.log
 .DS_Store
 **/deploy-check.err

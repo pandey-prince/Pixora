@@ -1,19 +1,26 @@
 import type { UploadApiResponse } from "cloudinary";
 import { cloudinary } from "../lib/cloudinary";
+import {
+  deleteLocalAsset,
+  isLocalStorage,
+  readLocalAsset,
+  uploadLocalBuffer,
+} from "./local-storage.service";
 
 export type CloudinaryUpload = Pick<UploadApiResponse, "public_id" | "secure_url">;
 
 /**
  * Upload an already-encrypted buffer to Cloudinary as an opaque `raw` asset.
- * The bytes are ciphertext, so Cloudinary (and anyone with the URL) only ever
- * sees an unreadable blob. We use `raw` because image transformations cannot be
- * applied to encrypted data.
+ * In local development (placeholder Cloudinary credentials), files are stored
+ * on disk and served from /local-assets instead.
  */
 export const uploadEncryptedBuffer = (
   buffer: Buffer,
   folder = "photo-gallery-encrypted",
-): Promise<CloudinaryUpload> =>
-  new Promise((resolve, reject) => {
+): Promise<CloudinaryUpload> => {
+  if (isLocalStorage()) return uploadLocalBuffer(buffer, folder);
+
+  return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder,
@@ -31,8 +38,13 @@ export const uploadEncryptedBuffer = (
     );
     stream.end(buffer);
   });
+};
 
 export const deleteEncryptedAsset = async (publicId: string): Promise<void> => {
+  if (isLocalStorage()) {
+    await deleteLocalAsset(publicId);
+    return;
+  }
   await cloudinary.uploader.destroy(publicId, { resource_type: "raw", invalidate: true });
 };
 
@@ -40,5 +52,11 @@ export const deleteEncryptedAsset = async (publicId: string): Promise<void> => {
  * Legacy delete for plaintext image assets uploaded before E2E encryption.
  */
 export const deleteImage = async (publicId: string): Promise<void> => {
+  if (isLocalStorage()) {
+    await deleteLocalAsset(publicId);
+    return;
+  }
   await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
 };
+
+export { readLocalAsset, isLocalStorage };
