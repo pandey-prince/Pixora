@@ -13,6 +13,10 @@ import { isLocalStorage, readLocalAsset } from "./services/cloudinary.service";
 
 export const app = express();
 
+// Render (and most hosts) terminate TLS in front of the app and set X-Forwarded-For.
+// Required for express-rate-limit to identify clients correctly.
+app.set("trust proxy", 1);
+
 app.use("/clerk/webhook", webhookRouter);
 app.use(
   clerkMiddleware({
