@@ -13,5 +13,10 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     res.status(error.statusCode).json({ message: error.message });
     return;
   }
-  res.status(500).json({ message: "Internal server error" });
+  const detail =
+    process.env.NODE_ENV !== "production" && error instanceof Error ? error.message : undefined;
+  res.status(500).json({
+    message: "Internal server error",
+    ...(detail ? { detail } : {}),
+  });
 };

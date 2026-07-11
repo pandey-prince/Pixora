@@ -81,7 +81,10 @@ export const initializeKeys = async (userId: string, payload: WrappedKeyPayload)
   assertPayload(payload);
 
   const updated = await prisma.user.updateMany({
-    where: { id: userId, encryptedMasterKey: null },
+    where: {
+      id: userId,
+      OR: [{ encryptedMasterKey: null }, { encryptedMasterKey: "" }],
+    },
     data: {
       encryptedMasterKey: payload.encryptedMasterKey,
       masterKeySalt: payload.masterKeySalt,
