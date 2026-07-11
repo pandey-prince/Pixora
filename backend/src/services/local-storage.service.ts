@@ -1,12 +1,14 @@
 import { randomUUID } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
-import { env } from "../config/env";
+import { env, isProduction } from "../config/env";
 
 const UPLOAD_ROOT = path.join(process.cwd(), ".local-uploads");
 
-export const isLocalStorage = () =>
-  env.CLOUDINARY_API_KEY === "demo" || env.CLOUDINARY_CLOUD_NAME === "demo";
+export const isLocalStorage = () => {
+  if (isProduction()) return false;
+  return env.CLOUDINARY_API_KEY === "demo" || env.CLOUDINARY_CLOUD_NAME === "demo";
+};
 
 const assetPath = (publicId: string) => {
   const resolved = path.resolve(UPLOAD_ROOT, publicId);

@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { deletePhoto, listPhotos, uploadPhotos } from "../controllers/photo.controller";
 import { requireApiAuth } from "../middleware/auth.middleware";
-import { uploadRateLimit } from "../middleware/rate-limit.middleware";
+import { listRateLimit, uploadRateLimit } from "../middleware/rate-limit.middleware";
 import { upload } from "../middleware/upload.middleware";
 import { asyncHandler } from "../utils/async-handler";
 
 export const photoRouter = Router();
 
 photoRouter.use(requireApiAuth);
-photoRouter.get("/", asyncHandler(listPhotos));
+photoRouter.get("/", listRateLimit, asyncHandler(listPhotos));
 photoRouter.post(
   "/upload",
   uploadRateLimit,

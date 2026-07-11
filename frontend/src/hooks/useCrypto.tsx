@@ -5,11 +5,18 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { clearDecryptionCache } from "../lib/decryption-cache";
+import {
+  clearVault,
+  getVaultMasterKey,
+  isVaultUnlocked,
+  requireVaultMasterKey,
+  setVaultMasterKey,
+  subscribeVault,
+} from "../lib/key-vault";
 import { cryptoApi, getApiError } from "../services/api";
 import {
   generateMasterKey,
@@ -17,8 +24,6 @@ import {
   unwrapMasterKey,
   unwrapMasterKeyWithRecovery,
   wrapMasterKey,
-  zeroMasterKey,
-  type MasterKey,
 } from "../lib/crypto";
 import type { KeyStatus } from "../types/photo";
 
@@ -33,7 +38,7 @@ type CryptoState =
 interface CryptoContextValue {
   state: CryptoState;
   error: string;
-  masterKey: MasterKey | null;
+  isUnlocked: boolean;
   pendingRecoveryCode: string | null;
   hasRecovery: boolean;
   refresh: () => Promise<void>;
@@ -43,6 +48,7 @@ interface CryptoContextValue {
   unlockWithRecovery: (recoveryCode: string) => Promise<void>;
   rotate: (currentPassphrase: string, nextPassphrase: string) => Promise<void>;
   lock: () => void;
+  requireMasterKey: () => ReturnType<typeof requireVaultMasterKey>;
 }
 
 const CryptoContext = createContext<CryptoContextValue | null>(null);
@@ -53,8 +59,11 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState("");
   const [pendingRecoveryCode, setPendingRecoveryCode] = useState<string | null>(null);
   const [hasRecovery, setHasRecovery] = useState(false);
-  const masterKeyRef = useRef<MasterKey | null>(null);
-  const [masterKey, setMasterKey] = useState<MasterKey | null>(null);
+  const [vaultVersion, setVaultVersion] = useState(0);
+
+  useEffect(() => subscribeVault(() => setVaultVersion((value) => value + 1)), []);
+
+  const isUnlocked = isVaultUnlocked();
 
   const requireToken = useCallback(async () => {
     const token = await getToken();
@@ -62,9 +71,8 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
     return token;
   }, [getToken]);
 
-  const applyUnlocked = useCallback((master: MasterKey) => {
-    masterKeyRef.current = master;
-    setMasterKey(master);
+  const applyUnlocked = useCallback((master: Awaited<ReturnType<typeof generateMasterKey>>) => {
+    setVaultMasterKey(master);
     setState("unlocked");
   }, []);
 
@@ -73,7 +81,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
       const token = await requireToken();
       const status = await cryptoApi.getKeys(token);
       setHasRecovery(status.hasRecovery);
-      if (masterKeyRef.current) {
+      if (getVaultMasterKey()) {
         setState("unlocked");
         return;
       }
@@ -105,9 +113,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
     let cancelled = false;
     void (async () => {
       if (cancelled) return;
-      zeroMasterKey(masterKeyRef.current);
-      masterKeyRef.current = null;
-      setMasterKey(null);
+      clearVault();
       clearDecryptionCache();
       setPendingRecoveryCode(null);
       setState("loading");
@@ -124,8 +130,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
       const recoveryCode = withRecovery ? generateRecoveryCode() : undefined;
       const wrapped = await wrapMasterKey(master, passphrase, recoveryCode);
       await cryptoApi.initKeys(token, wrapped);
-      masterKeyRef.current = master;
-      setMasterKey(master);
+      setVaultMasterKey(master);
       setHasRecovery(Boolean(recoveryCode));
       if (recoveryCode) {
         setPendingRecoveryCode(recoveryCode);
@@ -143,7 +148,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const unlockWithStatus = useCallback(
-    async (status: KeyStatus, unlocker: () => Promise<MasterKey>) => {
+    async (status: KeyStatus, unlocker: () => Promise<Awaited<ReturnType<typeof generateMasterKey>>>) => {
       if (
         !status.initialized ||
         !status.encryptedMasterKey ||
@@ -208,15 +213,14 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
       });
       const rewrapped = await wrapMasterKey(master, nextPassphrase);
       await cryptoApi.rotateKeys(token, rewrapped);
-      applyUnlocked(master);
+      setVaultMasterKey(master);
+      setState("unlocked");
     },
-    [requireToken, applyUnlocked],
+    [requireToken],
   );
 
   const lock = useCallback(() => {
-    zeroMasterKey(masterKeyRef.current);
-    masterKeyRef.current = null;
-    setMasterKey(null);
+    clearVault();
     clearDecryptionCache();
     setState("locked");
   }, []);
@@ -225,7 +229,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       state,
       error,
-      masterKey,
+      isUnlocked,
       pendingRecoveryCode,
       hasRecovery,
       refresh,
@@ -235,11 +239,12 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
       unlockWithRecovery,
       rotate,
       lock,
+      requireMasterKey: requireVaultMasterKey,
     }),
     [
       state,
       error,
-      masterKey,
+      isUnlocked,
       pendingRecoveryCode,
       hasRecovery,
       refresh,
@@ -249,6 +254,7 @@ export const CryptoProvider = ({ children }: { children: ReactNode }) => {
       unlockWithRecovery,
       rotate,
       lock,
+      vaultVersion,
     ],
   );
 
@@ -261,8 +267,7 @@ export const useCrypto = () => {
   return context;
 };
 
-export const useMasterKey = (): MasterKey => {
-  const { masterKey } = useCrypto();
-  if (!masterKey) throw new Error("Master key is locked");
-  return masterKey;
+export const useMasterKey = () => {
+  const { requireMasterKey } = useCrypto();
+  return requireMasterKey();
 };

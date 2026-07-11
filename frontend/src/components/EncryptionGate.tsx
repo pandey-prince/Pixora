@@ -132,6 +132,8 @@ const SetupForm = ({ onBrowse, embedded }: { onBrowse: boolean; embedded?: boole
     setBusy(true);
     try {
       await setup(passphrase, withRecovery);
+      setPassphrase("");
+      setConfirm("");
     } catch (setupError) {
       setError(getApiError(setupError));
     } finally {
@@ -221,9 +223,11 @@ const UnlockForm = ({ embedded }: { embedded?: boolean }) => {
     try {
       if (mode === "recovery") {
         await unlockWithRecovery(recoveryCode);
+        setRecoveryCode("");
       } else {
         if (!passphrase) return;
         await unlock(passphrase);
+        setPassphrase("");
       }
     } catch (unlockError) {
       setError(formatUnlockError(unlockError));

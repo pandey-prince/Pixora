@@ -3,6 +3,8 @@ import { parseUploadMetadata } from "../schemas/upload.schema";
 import { createEncryptedPhoto, getPhotos, removePhoto } from "../services/photo.service";
 import { HttpError } from "../utils/http-error";
 
+const MAX_PAGE = 10_000;
+
 export const uploadPhotos = async (req: Request, res: Response) => {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
   const imageFile = files?.image?.[0];
@@ -33,7 +35,7 @@ export const uploadPhotos = async (req: Request, res: Response) => {
 };
 
 export const listPhotos = async (req: Request, res: Response) => {
-  const page = Math.max(1, Number(req.query.page) || 1);
+  const page = Math.min(MAX_PAGE, Math.max(1, Number(req.query.page) || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 24));
   res.json(await getPhotos(req.dbUser!.id, page, limit));
 };

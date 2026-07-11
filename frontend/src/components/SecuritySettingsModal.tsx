@@ -1,5 +1,5 @@
 import { KeyRound, Loader2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getApiError } from "../services/api";
 import { useCrypto } from "../hooks/useCrypto";
 import { MIN_PASSPHRASE_LENGTH, validatePassphrase } from "../lib/crypto";
@@ -16,6 +16,14 @@ export const SecuritySettingsModal = ({ onClose }: SecuritySettingsModalProps) =
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const clearFields = () => {
+    setCurrentPassphrase("");
+    setNextPassphrase("");
+    setConfirmPassphrase("");
+  };
+
+  useEffect(() => () => clearFields(), []);
 
   const submit = async () => {
     setError("");

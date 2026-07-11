@@ -1,4 +1,4 @@
-const MAX_CACHE = 200;
+const MAX_CACHE = 20;
 const urlCache = new Map<string, string>();
 
 export const cacheKey = (userId: string, photoId: string, variant: string) =>
@@ -21,3 +21,9 @@ export const clearDecryptionCache = () => {
   for (const url of urlCache.values()) URL.revokeObjectURL(url);
   urlCache.clear();
 };
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") clearDecryptionCache();
+  });
+}

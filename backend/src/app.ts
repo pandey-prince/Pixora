@@ -1,21 +1,26 @@
-import { existsSync } from "fs";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import express from "express";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error.middleware";
+import { requireApiAuth } from "./middleware/auth.middleware";
+import { globalRateLimit } from "./middleware/rate-limit.middleware";
+import { hideServerFingerprint, securityHeaders } from "./middleware/security.middleware";
 import { cryptoKeyRouter } from "./routes/crypto-key.routes";
 import { photoRouter } from "./routes/photo.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { prisma } from "./lib/prisma";
 import { isLocalStorage, readLocalAsset } from "./services/cloudinary.service";
+import { userOwnsAsset } from "./services/photo.service";
+import { asyncHandler } from "./utils/async-handler";
+import { HttpError } from "./utils/http-error";
 
 export const app = express();
 
-// Render (and most hosts) terminate TLS in front of the app and set X-Forwarded-For.
-// Required for express-rate-limit to identify clients correctly.
 app.set("trust proxy", 1);
+app.use(hideServerFingerprint);
+app.use(securityHeaders);
 
 app.use("/clerk/webhook", webhookRouter);
 app.use(
@@ -43,42 +48,48 @@ app.use(
     credentials: true,
   }),
 );
+
+app.use(globalRateLimit);
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", database: "connected", storage: isLocalStorage() ? "local" : "cloudinary" });
+    res.json({ status: "ok" });
   } catch {
-    res.status(503).json({ status: "degraded", database: "unreachable" });
+    res.status(503).json({ status: "degraded" });
   }
 });
 
-app.get("/local-assets/*assetPath", (req, res) => {
-  if (!isLocalStorage()) {
-    res.status(404).end();
-    return;
-  }
-
-  const rawPath = req.params.assetPath;
-  const publicId = Array.isArray(rawPath) ? rawPath.join("/") : rawPath;
-  if (!publicId) {
-    res.status(400).json({ message: "Asset path is required" });
-    return;
-  }
-
-  try {
-    const filePath = readLocalAsset(publicId);
-    if (!existsSync(filePath)) {
-      res.status(404).json({ message: "Asset not found" });
+app.get(
+  "/local-assets/*assetPath",
+  requireApiAuth,
+  asyncHandler(async (req, res) => {
+    if (!isLocalStorage()) {
+      res.status(404).end();
       return;
     }
-    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    const rawPath = req.params.assetPath;
+    const publicId = Array.isArray(rawPath) ? rawPath.join("/") : rawPath;
+    if (!publicId) {
+      throw new HttpError(400, "Asset path is required");
+    }
+
+    const ownsAsset = await userOwnsAsset(req.dbUser!.id, publicId);
+    if (!ownsAsset) {
+      throw new HttpError(404, "Asset not found");
+    }
+
+    const filePath = readLocalAsset(publicId);
+    if (!existsSync(filePath)) {
+      throw new HttpError(404, "Asset not found");
+    }
+
+    res.setHeader("Cache-Control", "private, no-store");
     res.send(readFileSync(filePath));
-  } catch {
-    res.status(400).json({ message: "Invalid asset path" });
-  }
-});
+  }),
+);
 
 app.use("/api/crypto", cryptoKeyRouter);
 app.use("/api/photos", photoRouter);

@@ -41,11 +41,84 @@ const MAX_KDF_ITERATIONS = 10;
 export const MIN_PASSPHRASE_LENGTH = 12;
 export const MAX_UPLOAD_BYTES = 1000 * 1024;
 
+const BLOCKED_IMAGE_TYPES = new Set(["image/svg+xml", "text/html", "application/xhtml+xml"]);
+
 export const validatePassphrase = (passphrase: string): string | null => {
   if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
     return `Use at least ${MIN_PASSPHRASE_LENGTH} characters.`;
   }
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((rule) =>
+    rule.test(passphrase),
+  ).length;
+  if (classes < 2) {
+    return "Use a mix of letters, numbers, or symbols.";
+  }
+  if (/^(.)\1{5,}$/.test(passphrase)) {
+    return "Avoid repeating the same character.";
+  }
   return null;
+};
+
+const readImageSignatures = (bytes: Uint8Array) => {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return "image/png";
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+};
+
+export const validateImageFile = async (file: File): Promise<string | null> => {
+  if (BLOCKED_IMAGE_TYPES.has(file.type)) {
+    return "SVG and HTML files are not allowed.";
+  }
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const detected = readImageSignatures(header);
+  if (!detected) return "Only JPEG, PNG, GIF, or WebP images are allowed.";
+  if (file.type.startsWith("image/") && file.type !== detected && file.type !== "image/jpg") {
+    return "File content does not match its declared type.";
+  }
+  return null;
+};
+
+const allowedAssetHosts = () => {
+  const hosts = new Set(["res.cloudinary.com", "localhost", "127.0.0.1"]);
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    try {
+      hosts.add(new URL(apiUrl).hostname);
+    } catch {
+      /* ignore invalid env */
+    }
+  }
+  return hosts;
+};
+
+const assertAllowedAssetUrl = (url: string) => {
+  const parsed = new URL(url);
+  const hosts = allowedAssetHosts();
+  const allowed =
+    hosts.has(parsed.hostname) || parsed.hostname.endsWith(".cloudinary.com");
+  if (!allowed) throw new Error("Blocked asset URL");
 };
 
 const clampKdf = (params: KdfParams): KdfParams => ({
@@ -230,19 +303,27 @@ export const unwrapMasterKeyWithRecovery = async (
   return { raw, key: await importAesKey(raw) };
 };
 
-/** Human-friendly, high-entropy recovery code (~130 bits). */
+/** Human-friendly, high-entropy recovery code (~125 bits). */
 export const generateRecoveryCode = (): string => {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars
-  const bytes = randomBytes(25);
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const alphabetLen = alphabet.length;
+  const maxUnbiased = Math.floor(256 / alphabetLen) * alphabetLen;
   const groups: string[] = [];
   let chunk = "";
-  for (let i = 0; i < bytes.length; i += 1) {
-    chunk += alphabet[bytes[i]! % alphabet.length];
-    if (chunk.length === 5) {
-      groups.push(chunk);
-      chunk = "";
+
+  while (groups.length < 5) {
+    const bytes = randomBytes(8);
+    for (const byte of bytes) {
+      if (byte >= maxUnbiased) continue;
+      chunk += alphabet[byte % alphabetLen]!;
+      if (chunk.length === 5) {
+        groups.push(chunk);
+        chunk = "";
+        if (groups.length === 5) break;
+      }
     }
   }
+
   return groups.join("-");
 };
 
@@ -350,6 +431,7 @@ export const decryptFromUrl = async (
     mimeType: string;
   },
 ): Promise<Blob> => {
+  assertAllowedAssetUrl(options.url);
   const response = await fetch(options.url);
   if (!response.ok) throw new Error("Failed to download encrypted data");
   const ciphertext = new Uint8Array(await response.arrayBuffer());

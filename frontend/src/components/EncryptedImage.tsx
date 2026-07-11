@@ -33,7 +33,7 @@ export const decryptPhotoBlob = async (
 };
 
 const useObjectUrl = (photo: Photo, variant: Variant) => {
-  const { masterKey } = useCrypto();
+  const { isUnlocked, requireMasterKey } = useCrypto();
   const { user } = useUser();
   const userId = user?.id ?? "anonymous";
   const [url, setUrl] = useState<string | null>(() => {
@@ -55,11 +55,11 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
         if (!cancelled) setUrl(cached);
         return;
       }
-      if (!masterKey) return;
+      if (!isUnlocked) return;
 
       if (!cancelled) setFailed(false);
       try {
-        const blob = await decryptPhotoBlob(masterKey, photo, variant);
+        const blob = await decryptPhotoBlob(requireMasterKey(), photo, variant);
         if (cancelled) return;
         const objectUrl = URL.createObjectURL(blob);
         putInCache(key, objectUrl);
@@ -72,7 +72,7 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
     return () => {
       cancelled = true;
     };
-  }, [photo, variant, masterKey, userId]);
+  }, [photo, variant, isUnlocked, userId, requireMasterKey]);
 
   return { url, failed };
 };
@@ -118,7 +118,7 @@ export const EncryptedImage = ({ photo, variant = "thumb", alt, className, onCli
 
 /** Decrypt and memoize a photo's original file name for display and downloads. */
 export const useDecryptedName = (photo: Photo): string => {
-  const { masterKey } = useCrypto();
+  const { isUnlocked, requireMasterKey } = useCrypto();
   const [name, setName] = useState(photo.encrypted ? "" : photo.fileName);
 
   useEffect(() => {
@@ -128,12 +128,16 @@ export const useDecryptedName = (photo: Photo): string => {
         if (!cancelled) setName(photo.fileName);
         return;
       }
-      if (!masterKey || !photo.encryptedFileName || !photo.fileNameIv) {
+      if (!isUnlocked || !photo.encryptedFileName || !photo.fileNameIv) {
         if (!cancelled) setName("photo");
         return;
       }
       try {
-        const decrypted = await decryptFileName(masterKey, photo.encryptedFileName, photo.fileNameIv);
+        const decrypted = await decryptFileName(
+          requireMasterKey(),
+          photo.encryptedFileName,
+          photo.fileNameIv,
+        );
         if (!cancelled) setName(decrypted);
       } catch {
         if (!cancelled) setName("photo");
@@ -142,7 +146,7 @@ export const useDecryptedName = (photo: Photo): string => {
     return () => {
       cancelled = true;
     };
-  }, [photo, masterKey]);
+  }, [photo, isUnlocked, requireMasterKey]);
 
   return name;
 };

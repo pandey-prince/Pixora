@@ -4,7 +4,7 @@ import type { RequestHandler } from "express";
 import { env } from "../config/env";
 import {
   emailFromClerkPayload,
-  isLocalClerkSecret,
+  isJwtAuthMode,
   verifyClerkBearerToken,
 } from "../lib/clerk-jwks";
 import { prisma } from "../lib/prisma";
@@ -63,7 +63,7 @@ const resolveDbUserFromJwt = async (clerkId: string, email: string) => {
 };
 
 export const requireApiAuth: RequestHandler = asyncHandler(async (req, _res, next) => {
-  if (isLocalClerkSecret) {
+  if (isJwtAuthMode()) {
     const token = bearerToken(req.headers.authorization);
     if (!token) throw new HttpError(401, "Unauthorized");
 

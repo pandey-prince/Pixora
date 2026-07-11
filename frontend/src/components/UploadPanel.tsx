@@ -1,7 +1,7 @@
 import { useAuth } from "@clerk/react";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
-import { encryptPhoto, MAX_UPLOAD_BYTES } from "../lib/crypto";
+import { encryptPhoto, MAX_UPLOAD_BYTES, validateImageFile } from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
@@ -17,7 +17,7 @@ interface SelectedFile {
 
 export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const { getToken } = useAuth();
-  const { masterKey } = useCrypto();
+  const { isUnlocked, requireMasterKey } = useCrypto();
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const hintId = useId();
@@ -33,18 +33,27 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     setPartialSuccess("");
     const images = files.filter((file) => file.type.startsWith("image/"));
     if (images.length !== files.length) setError("Only image files can be uploaded.");
-    const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
-    if (oversized) {
-      setError(`"${oversized.name}" exceeds the 1 MB limit.`);
-      return;
-    }
-    setSelected((current) => [
-      ...current,
-      ...images.slice(0, Math.max(0, 20 - current.length)).map((file) => ({
-        file,
-        preview: URL.createObjectURL(file),
-      })),
-    ]);
+    void (async () => {
+      for (const file of images) {
+        const validation = await validateImageFile(file);
+        if (validation) {
+          setError(validation);
+          return;
+        }
+      }
+      const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
+      if (oversized) {
+        setError(`"${oversized.name}" exceeds the 1 MB limit.`);
+        return;
+      }
+      setSelected((current) => [
+        ...current,
+        ...images.slice(0, Math.max(0, 20 - current.length)).map((file) => ({
+          file,
+          preview: URL.createObjectURL(file),
+        })),
+      ]);
+    })();
   };
 
   const removeSelected = (index: number) => {
@@ -56,10 +65,11 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
 
   const upload = async () => {
     if (!selected.length) return;
-    if (!masterKey) {
+    if (!isUnlocked) {
       setError("Your gallery is locked. Unlock it before uploading.");
       return;
     }
+    const masterKey = requireMasterKey();
     setIsUploading(true);
     setError("");
     setPartialSuccess("");

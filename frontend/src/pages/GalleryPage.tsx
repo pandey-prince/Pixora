@@ -11,6 +11,7 @@ import { SecuritySettingsModal } from "../components/SecuritySettingsModal";
 import { UploadPanel } from "../components/UploadPanel";
 import { decryptPhotoBlob, resolveFileName } from "../components/EncryptedImage";
 import { useCrypto } from "../hooks/useCrypto";
+import { useAutoLock } from "../hooks/useAutoLock";
 import { usePhotos } from "../hooks/usePhotos";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
@@ -18,7 +19,8 @@ import type { Photo } from "../types/photo";
 export const GalleryPage = () => {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { masterKey, lock, state: cryptoState } = useCrypto();
+  const { isUnlocked, lock, requireMasterKey, state: cryptoState } = useCrypto();
+  useAutoLock();
   const { photos, isLoading, isLoadingMore, hasMore, error, reload, loadMore, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
   const [actionError, setActionError] = useState("");
@@ -33,7 +35,7 @@ export const GalleryPage = () => {
 
   const handleDelete = async (photo: Photo) => {
     const displayName =
-      photo.encrypted && masterKey ? await resolveFileName(masterKey, photo) : photo.fileName;
+      photo.encrypted && isUnlocked ? await resolveFileName(requireMasterKey(), photo) : photo.fileName;
     if (!window.confirm(`Delete "${displayName}"? This cannot be undone.`)) return;
     setDeletingId(photo.id);
     setActionError("");
@@ -77,8 +79,8 @@ export const GalleryPage = () => {
 
   const fetchPhotoBlob = async (photo: Photo): Promise<Blob> => {
     if (photo.encrypted) {
-      if (!masterKey) throw new Error("Gallery is locked");
-      return decryptPhotoBlob(masterKey, photo, "full");
+      if (!isUnlocked) throw new Error("Gallery is locked");
+      return decryptPhotoBlob(requireMasterKey(), photo, "full");
     }
     const response = await fetch(photo.imageUrl);
     if (!response.ok) throw new Error("Failed to download photo");
@@ -86,7 +88,7 @@ export const GalleryPage = () => {
   };
 
   const fetchPhotoName = async (photo: Photo): Promise<string> => {
-    if (photo.encrypted && masterKey) return resolveFileName(masterKey, photo);
+    if (photo.encrypted && isUnlocked) return resolveFileName(requireMasterKey(), photo);
     return photo.fileName;
   };
 

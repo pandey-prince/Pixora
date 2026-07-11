@@ -29,7 +29,7 @@ export const handleClerkWebhook = async (req: Request, res: Response) => {
       "svix-signature": svixSignature,
     }) as ClerkWebhookEvent;
   } catch {
-    throw new HttpError(400, "Invalid webhook signature");
+    throw new HttpError(401, "Invalid webhook signature");
   }
 
   if (event.type === "user.created" || event.type === "user.updated") {

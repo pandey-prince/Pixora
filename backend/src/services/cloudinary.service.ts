@@ -1,5 +1,6 @@
 import type { UploadApiResponse } from "cloudinary";
 import { cloudinary } from "../lib/cloudinary";
+import { env } from "../config/env";
 import { HttpError } from "../utils/http-error";
 import {
   deleteLocalAsset,
@@ -25,13 +26,35 @@ const mapCloudinaryError = (error: unknown): HttpError => {
       "File is too large for your Cloudinary plan (1 MB limit). Use a smaller image or upgrade Cloudinary.",
     );
   }
-  return new HttpError(502, `Storage upload failed: ${message}`);
+
+  console.error("Storage upload failed:", message);
+  return new HttpError(502, "Storage upload failed");
+};
+
+const AUTHENTICATED_TTL_SECONDS = 60 * 60;
+
+export const signEncryptedAssetUrl = (publicId: string, authenticated = true): string => {
+  if (isLocalStorage()) {
+    return `http://localhost:${env.PORT}/local-assets/${publicId
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+  }
+
+  return cloudinary.url(publicId, {
+    resource_type: "raw",
+    type: authenticated ? "authenticated" : "upload",
+    sign_url: authenticated,
+    secure: true,
+    ...(authenticated
+      ? { expires_at: Math.floor(Date.now() / 1000) + AUTHENTICATED_TTL_SECONDS }
+      : {}),
+  });
 };
 
 /**
- * Upload an already-encrypted buffer to Cloudinary as an opaque `raw` asset.
- * In local development (placeholder Cloudinary credentials), files are stored
- * on disk and served from /local-assets instead.
+ * Upload an already-encrypted buffer to Cloudinary as an opaque authenticated `raw` asset.
+ * In local development (placeholder Cloudinary credentials), files are stored on disk.
  */
 export const uploadEncryptedBuffer = (
   buffer: Buffer,
@@ -44,6 +67,7 @@ export const uploadEncryptedBuffer = (
       {
         folder,
         resource_type: "raw",
+        type: "authenticated",
         use_filename: false,
         unique_filename: true,
       },
@@ -52,7 +76,10 @@ export const uploadEncryptedBuffer = (
           reject(mapCloudinaryError(error ?? new Error("Cloudinary upload failed")));
           return;
         }
-        resolve({ public_id: result.public_id, secure_url: result.secure_url });
+        resolve({
+          public_id: result.public_id,
+          secure_url: signEncryptedAssetUrl(result.public_id, true),
+        });
       },
     );
     stream.end(buffer);
