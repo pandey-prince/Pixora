@@ -1,6 +1,6 @@
 import { useAuth, useUser, UserButton } from "@clerk/react";
 import JSZip from "jszip";
-import { Camera, Check, Download, Images, Lock, Settings, Sparkles, X } from "lucide-react";
+import { Camera, Check, Download, Images, Lock, Settings, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
@@ -170,7 +170,7 @@ export const GalleryPage = () => {
       <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-8 lg:py-12">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-violet-600"><Sparkles size={14} /> Your private library</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-violet-600">Your private library</p>
             <h1 className="text-4xl font-black tracking-[-0.045em] sm:text-5xl">Moments worth keeping.</h1>
             <p className="mt-3 text-sm text-slate-500">Upload your favorites. We’ll keep the view calm and beautiful.</p>
           </div>
