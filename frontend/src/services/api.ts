@@ -65,5 +65,11 @@ export const getApiError = (error: unknown) => {
     }
     return error.response?.data?.message ?? error.message;
   }
+  if (error instanceof Error) {
+    if (error.message.includes("WebAssembly") || error.message.includes("wasm")) {
+      return "Encryption could not start in this browser. Refresh the page and try again.";
+    }
+    return error.message || "Something went wrong";
+  }
   return "Something went wrong";
 };
