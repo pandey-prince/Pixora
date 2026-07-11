@@ -8,5 +8,5 @@ import multer from "multer";
  */
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 2 },
+  limits: { fileSize: 1048576, files: 2 },
 });

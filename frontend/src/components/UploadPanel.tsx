@@ -3,7 +3,7 @@ import { ImagePlus, Upload, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { encryptPhoto, MAX_UPLOAD_BYTES } from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
-import { photoApi } from "../services/api";
+import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
 
 interface UploadPanelProps {
@@ -35,7 +35,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     if (images.length !== files.length) setError("Only image files can be uploaded.");
     const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
     if (oversized) {
-      setError(`"${oversized.name}" exceeds the 15 MB limit.`);
+      setError(`"${oversized.name}" exceeds the 1 MB limit.`);
       return;
     }
     setSelected((current) => [
@@ -75,6 +75,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     const total = selected.length;
     const uploaded: Photo[] = [];
     const failed: SelectedFile[] = [];
+    let failureReason = "";
 
     for (let index = 0; index < total; index += 1) {
       const item = selected[index]!;
@@ -85,8 +86,9 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
         });
         uploaded.push(photo);
         URL.revokeObjectURL(item.preview);
-      } catch {
+      } catch (uploadError) {
         failed.push(item);
+        if (!failureReason) failureReason = getApiError(uploadError);
       }
     }
 
@@ -99,9 +101,13 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
       const names = failed.map(({ file }) => file.name).join(", ");
       if (uploaded.length > 0) {
         setPartialSuccess(`${uploaded.length} photo${uploaded.length > 1 ? "s" : ""} uploaded.`);
-        setError(`Failed to upload: ${names}. Fix the issue and retry the remaining files.`);
+        setError(
+          failureReason
+            ? `${failureReason} Could not upload: ${names}.`
+            : `Failed to upload: ${names}. Fix the issue and retry the remaining files.`,
+        );
       } else {
-        setError(`Upload failed for: ${names}`);
+        setError(failureReason || `Upload failed for: ${names}`);
       }
     }
 
@@ -148,7 +154,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
         <div>
           <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} aria-hidden />
           <p className="font-semibold text-slate-800">Drop photos here or click to browse</p>
-          <p id={hintId} className="mt-1 text-xs text-slate-500">Up to 20 images, 15 MB each</p>
+          <p id={hintId} className="mt-1 text-xs text-slate-500">Up to 20 images, 1 MB each</p>
         </div>
       </div>
 

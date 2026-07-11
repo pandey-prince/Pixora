@@ -1,5 +1,6 @@
 import type { UploadApiResponse } from "cloudinary";
 import { cloudinary } from "../lib/cloudinary";
+import { HttpError } from "../utils/http-error";
 import {
   deleteLocalAsset,
   isLocalStorage,
@@ -8,6 +9,24 @@ import {
 } from "./local-storage.service";
 
 export type CloudinaryUpload = Pick<UploadApiResponse, "public_id" | "secure_url">;
+
+const mapCloudinaryError = (error: unknown): HttpError => {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: string }).message)
+      : "Storage upload failed";
+
+  if (message.includes("File size too large") || message.includes("Max file size")) {
+    return new HttpError(413, "Encrypted file exceeds the 1 MB storage limit.");
+  }
+  if (message.includes("unsigned uploads")) {
+    return new HttpError(
+      413,
+      "File is too large for your Cloudinary plan (1 MB limit). Use a smaller image or upgrade Cloudinary.",
+    );
+  }
+  return new HttpError(502, `Storage upload failed: ${message}`);
+};
 
 /**
  * Upload an already-encrypted buffer to Cloudinary as an opaque `raw` asset.
@@ -30,7 +49,7 @@ export const uploadEncryptedBuffer = (
       },
       (error, result) => {
         if (error || !result) {
-          reject(error ?? new Error("Cloudinary upload failed"));
+          reject(mapCloudinaryError(error ?? new Error("Cloudinary upload failed")));
           return;
         }
         resolve({ public_id: result.public_id, secure_url: result.secure_url });

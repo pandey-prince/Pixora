@@ -39,7 +39,7 @@ const MAX_KDF_MEMORY_KIB = 131072;
 const MAX_KDF_ITERATIONS = 10;
 
 export const MIN_PASSPHRASE_LENGTH = 12;
-export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 1000 * 1024;
 
 export const validatePassphrase = (passphrase: string): string | null => {
   if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
