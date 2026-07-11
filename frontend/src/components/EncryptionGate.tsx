@@ -6,13 +6,21 @@ import { getApiError, photoApi } from "../services/api";
 import { useCrypto } from "../hooks/useCrypto";
 import { MIN_PASSPHRASE_LENGTH, validatePassphrase } from "../lib/crypto";
 
-const Shell = ({ children }: { children: ReactNode }) => (
-  <main className="grid min-h-screen place-items-center bg-[#f8f7f4] px-4 text-slate-950">
-    <div className="w-full max-w-md rounded-[1.75rem] border border-slate-200/80 bg-white p-7 shadow-sm">
-      {children}
-    </div>
-  </main>
+const GateCard = ({ children }: { children: ReactNode }) => (
+  <div className="w-full rounded-[1.75rem] border border-slate-200/80 bg-white p-7 shadow-sm">
+    {children}
+  </div>
 );
+
+const Shell = ({ embedded, children }: { embedded?: boolean; children: ReactNode }) => {
+  if (embedded) return <GateCard>{children}</GateCard>;
+
+  return (
+    <main className="mx-auto w-full max-w-md px-4 py-6 text-slate-950">
+      <GateCard>{children}</GateCard>
+    </main>
+  );
+};
 
 const PasswordInput = ({
   value,
@@ -95,7 +103,7 @@ const RecoveryAckScreen = () => {
   );
 };
 
-const SetupForm = ({ onBrowse }: { onBrowse: boolean }) => {
+const SetupForm = ({ onBrowse, embedded }: { onBrowse: boolean; embedded?: boolean }) => {
   const { setup } = useCrypto();
   const [passphrase, setPassphrase] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -125,7 +133,7 @@ const SetupForm = ({ onBrowse }: { onBrowse: boolean }) => {
   };
 
   return (
-    <Shell>
+    <Shell embedded={embedded}>
       <div className="mb-3 inline-flex rounded-2xl bg-violet-100 p-3 text-violet-600">
         <ShieldCheck size={22} />
       </div>
@@ -191,7 +199,7 @@ const formatUnlockError = (unlockError: unknown) => {
   return "Something went wrong. Check your connection and try again.";
 };
 
-const UnlockForm = () => {
+const UnlockForm = ({ embedded }: { embedded?: boolean }) => {
   const { unlock, unlockWithRecovery, hasRecovery } = useCrypto();
   const [mode, setMode] = useState<"passphrase" | "recovery">("passphrase");
   const [passphrase, setPassphrase] = useState("");
@@ -217,7 +225,7 @@ const UnlockForm = () => {
   };
 
   return (
-    <Shell>
+    <Shell embedded={embedded}>
       <div className="mb-3 inline-flex rounded-2xl bg-violet-100 p-3 text-violet-600">
         <Lock size={22} />
       </div>
@@ -373,7 +381,7 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
         {showUnlockModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md">
-              <UnlockForm />
+              <UnlockForm embedded />
               <button
                 type="button"
                 onClick={() => setShowUnlockModal(false)}
@@ -401,7 +409,7 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
         {showSetupModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md">
-              <SetupForm onBrowse />
+              <SetupForm onBrowse embedded />
               <button
                 type="button"
                 onClick={() => setShowSetupModal(false)}
