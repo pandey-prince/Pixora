@@ -3,6 +3,8 @@ import {
   decryptFileName,
   generateMasterKey,
   generateRecoveryCode,
+  MAX_UPLOAD_BYTES,
+  prepareImageForUpload,
   unwrapMasterKey,
   unwrapMasterKeyWithRecovery,
   validatePassphrase,
@@ -58,5 +60,16 @@ describe("crypto", () => {
       ciphertext.metadata.fileNameIv,
     );
     expect(name).toBe("vacation.png");
+  });
+
+  test("prepareImageForUpload leaves small files unchanged", async () => {
+    const bytes = new Uint8Array(2000);
+    bytes[0] = 0xff;
+    bytes[1] = 0xd8;
+    bytes[2] = 0xff;
+    const file = new File([bytes], "small.jpg", { type: "image/jpeg" });
+    const result = await prepareImageForUpload(file);
+    expect(result.compressed).toBe(false);
+    expect(result.file.size).toBeLessThan(MAX_UPLOAD_BYTES);
   });
 });

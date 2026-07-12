@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import { getApiError, photoApi } from "../services/api";
 import { useCrypto } from "../hooks/useCrypto";
+import { UnlockRequestProvider, useUnlockRequest } from "../hooks/useUnlockRequest";
 import { MIN_PASSPHRASE_LENGTH, validatePassphrase } from "../lib/crypto";
 
 const GateCard = ({ children }: { children: ReactNode }) => (
@@ -21,6 +22,15 @@ const Shell = ({ embedded, children }: { embedded?: boolean; children: ReactNode
     </main>
   );
 };
+
+const GateSkeletonBar = () => (
+  <div className="sticky top-0 z-30 border-b border-slate-200/70 bg-[#f8f7f4]/95 px-4 py-3 backdrop-blur">
+    <div className="mx-auto flex max-w-[1500px] items-center gap-3">
+      <div className="h-2.5 w-32 animate-pulse rounded-full bg-slate-200" />
+      <div className="h-2.5 flex-1 max-w-xs animate-pulse rounded-full bg-slate-100" />
+    </div>
+  </div>
+);
 
 const PasswordInput = ({
   value,
@@ -321,26 +331,69 @@ const GateBanner = ({ children, onAction, actionLabel, message }: {
   </div>
 );
 
-export const EncryptionGate = ({ children }: { children: ReactNode }) => {
+const UnlockModals = () => {
+  const { showUnlockModal, setShowUnlockModal, showSetupModal, setShowSetupModal } = useUnlockRequest();
+
+  return (
+    <>
+      {showUnlockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md">
+            <UnlockForm embedded />
+            <button
+              type="button"
+              onClick={() => setShowUnlockModal(false)}
+              className="mt-3 w-full text-center text-sm font-semibold text-white"
+            >
+              Continue browsing
+            </button>
+          </div>
+        </div>
+      )}
+      {showSetupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md">
+            <SetupForm onBrowse embedded />
+            <button
+              type="button"
+              onClick={() => setShowSetupModal(false)}
+              className="mt-3 w-full text-center text-sm font-semibold text-white"
+            >
+              Continue browsing
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const EncryptionGateInner = ({ children }: { children: ReactNode }) => {
   const { getToken } = useAuth();
   const { state, error, refresh } = useCrypto();
+  const { setShowUnlockModal, setShowSetupModal } = useUnlockRequest();
   const [allowBrowse, setAllowBrowse] = useState(false);
-  const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [browseCheckDone, setBrowseCheckDone] = useState(false);
 
   useEffect(() => {
-    if (state !== "locked" && state !== "needs-setup") return;
+    if (state !== "locked" && state !== "needs-setup") {
+      setBrowseCheckDone(true);
+      return;
+    }
+    setBrowseCheckDone(false);
     let cancelled = false;
     void (async () => {
       try {
         const token = await getToken();
         if (!token || cancelled) return;
-        const data = await photoApi.list(token, 1, 24);
+        const data = await photoApi.list(token, 1, 1);
         if (!cancelled) {
-          setAllowBrowse(data.photos.some((photo) => !photo.encrypted) || data.photos.length > 0);
+          setAllowBrowse(data.pagination.total > 0);
         }
       } catch {
         if (!cancelled) setAllowBrowse(false);
+      } finally {
+        if (!cancelled) setBrowseCheckDone(true);
       }
     })();
     return () => {
@@ -348,19 +401,16 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
     };
   }, [state, getToken]);
 
-  if (state === "unlocked") return <>{children}</>;
-  if (state === "needsRecoveryAck") return <RecoveryAckScreen />;
-
-  if (state === "loading") {
+  if (state === "unlocked") {
     return (
-      <Shell>
-        <div className="flex items-center gap-3 text-sm text-slate-500">
-          <Loader2 size={18} className="animate-spin" />
-          Preparing secure gallery...
-        </div>
-      </Shell>
+      <>
+        {children}
+        <UnlockModals />
+      </>
     );
   }
+
+  if (state === "needsRecoveryAck") return <RecoveryAckScreen />;
 
   if (state === "error") {
     return (
@@ -381,9 +431,13 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  if (state === "locked" && allowBrowse) {
-    return (
-      <>
+  const showGalleryWhileChecking =
+    (state === "loading" || ((state === "locked" || state === "needs-setup") && !browseCheckDone)) ||
+    ((state === "locked" || state === "needs-setup") && browseCheckDone && allowBrowse);
+
+  if (showGalleryWhileChecking) {
+    const banner =
+      browseCheckDone && state === "locked" ? (
         <GateBanner
           message="Your gallery is locked. Unlock to view encrypted photos and upload new ones."
           actionLabel="Unlock gallery"
@@ -391,27 +445,7 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
         >
           {children}
         </GateBanner>
-        {showUnlockModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md">
-              <UnlockForm embedded />
-              <button
-                type="button"
-                onClick={() => setShowUnlockModal(false)}
-                className="mt-3 w-full text-center text-sm font-semibold text-white"
-              >
-                Continue browsing
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
-
-  if (state === "needs-setup" && allowBrowse) {
-    return (
-      <>
+      ) : browseCheckDone && state === "needs-setup" ? (
         <GateBanner
           message="Set up encryption before uploading new photos. Existing photos remain visible below."
           actionLabel="Set up encryption"
@@ -419,23 +453,26 @@ export const EncryptionGate = ({ children }: { children: ReactNode }) => {
         >
           {children}
         </GateBanner>
-        {showSetupModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md">
-              <SetupForm onBrowse embedded />
-              <button
-                type="button"
-                onClick={() => setShowSetupModal(false)}
-                className="mt-3 w-full text-center text-sm font-semibold text-white"
-              >
-                Continue browsing
-              </button>
-            </div>
-          </div>
-        )}
+      ) : (
+        <>
+          <GateSkeletonBar />
+          {children}
+        </>
+      );
+
+    return (
+      <>
+        {banner}
+        <UnlockModals />
       </>
     );
   }
 
   return state === "needs-setup" ? <SetupForm onBrowse={false} /> : <UnlockForm />;
 };
+
+export const EncryptionGate = ({ children }: { children: ReactNode }) => (
+  <UnlockRequestProvider>
+    <EncryptionGateInner>{children}</EncryptionGateInner>
+  </UnlockRequestProvider>
+);

@@ -1,6 +1,7 @@
 import { Download, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { EncryptedImage, useDecryptedName } from "./EncryptedImage";
+import { useCrypto } from "../hooks/useCrypto";
 import type { Photo } from "../types/photo";
 
 interface PhotoLightboxProps {
@@ -13,9 +14,11 @@ const FOCUSABLE =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps) => {
+  const { isUnlocked } = useCrypto();
   const fileName = useDecryptedName(photo);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const canDownload = !photo.encrypted || isUnlocked;
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -69,17 +72,21 @@ export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps
         <div className="mb-4 flex items-center justify-between text-white">
           <div>
             <p className="text-sm font-semibold">{fileName}</p>
-            <p className="text-xs text-white/70">Use Escape or click outside to close</p>
+            <p className="text-xs text-white/70">
+              {canDownload ? "Use Escape or click outside to close" : "Unlock your gallery to view and download"}
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onDownload}
-              className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/25"
-            >
-              <Download size={15} />
-              Download
-            </button>
+            {canDownload && (
+              <button
+                type="button"
+                onClick={onDownload}
+                className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/25"
+              >
+                <Download size={15} />
+                Download
+              </button>
+            )}
             <button
               ref={closeRef}
               type="button"
@@ -91,12 +98,20 @@ export const PhotoLightbox = ({ photo, onClose, onDownload }: PhotoLightboxProps
             </button>
           </div>
         </div>
-        <div className="perspective-[1800px]">
+        <div className="relative perspective-[1800px]">
+          {canDownload && photo.thumbUrl && (
+            <EncryptedImage
+              photo={photo}
+              variant="thumb"
+              alt=""
+              className="absolute inset-0 max-h-[82vh] w-full scale-110 rounded-[1.75rem] object-contain opacity-30 blur-2xl"
+            />
+          )}
           <EncryptedImage
             photo={photo}
             variant="full"
             alt={fileName}
-            className="animate-photo-pop max-h-[82vh] w-full rounded-[1.75rem] object-contain shadow-2xl shadow-black/40"
+            className="relative animate-photo-pop max-h-[82vh] w-full rounded-[1.75rem] object-contain shadow-2xl shadow-black/40"
           />
         </div>
       </div>

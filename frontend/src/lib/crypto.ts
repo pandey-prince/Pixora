@@ -100,6 +100,67 @@ export const validateImageFile = async (file: File): Promise<string | null> => {
   return null;
 };
 
+const TARGET_UPLOAD_BYTES = 900 * 1024;
+const MAX_SELECTION = 20;
+
+export const MAX_SELECTION_COUNT = MAX_SELECTION;
+
+const renderJpeg = async (
+  bitmap: ImageBitmap,
+  maxDimension: number,
+  quality: number,
+): Promise<Blob | null> => {
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.drawImage(bitmap, 0, 0, width, height);
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality),
+  );
+};
+
+/** Compress large images client-side so encrypted payload stays under the 1 MB limit. */
+export const prepareImageForUpload = async (
+  file: File,
+): Promise<{ file: File; compressed: boolean }> => {
+  if (file.size <= TARGET_UPLOAD_BYTES) return { file, compressed: false };
+  if (typeof createImageBitmap !== "function") {
+    throw new Error(`"${file.name}" is too large and could not be compressed in this browser.`);
+  }
+
+  const bitmap = await createImageBitmap(file);
+  let maxDim = Math.max(bitmap.width, bitmap.height);
+  let blob: Blob | null = null;
+
+  try {
+    while (maxDim >= 320) {
+      for (let quality = 0.85; quality >= 0.35; quality -= 0.1) {
+        blob = await renderJpeg(bitmap, maxDim, quality);
+        if (blob && blob.size <= TARGET_UPLOAD_BYTES) break;
+      }
+      if (blob && blob.size <= TARGET_UPLOAD_BYTES) break;
+      maxDim = Math.round(maxDim * 0.75);
+    }
+  } finally {
+    bitmap.close();
+  }
+
+  if (!blob || blob.size > TARGET_UPLOAD_BYTES) {
+    throw new Error(`Could not compress "${file.name}" under 1 MB.`);
+  }
+
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+  return {
+    file: new File([blob], `${baseName}.jpg`, { type: "image/jpeg" }),
+    compressed: true,
+  };
+};
+
 const allowedAssetHosts = () => {
   const hosts = new Set(["res.cloudinary.com", "localhost", "127.0.0.1"]);
   const apiUrl = import.meta.env.VITE_API_URL;

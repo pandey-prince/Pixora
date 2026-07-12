@@ -6,13 +6,23 @@ interface GalleryGridProps {
   photos: Photo[];
   deletingId: string;
   selectedIds: Set<string>;
+  canModify: boolean;
   onDelete: (photo: Photo) => void;
   onDownload: (photo: Photo) => void;
   onOpen: (photo: Photo) => void;
   onToggleSelect: (photo: Photo) => void;
 }
 
-export const GalleryGrid = ({ photos, deletingId, selectedIds, onDelete, onDownload, onOpen, onToggleSelect }: GalleryGridProps) => {
+export const GalleryGrid = ({
+  photos,
+  deletingId,
+  selectedIds,
+  canModify,
+  onDelete,
+  onDownload,
+  onOpen,
+  onToggleSelect,
+}: GalleryGridProps) => {
   if (photos.length === 0) {
     return (
       <div className="grid min-h-80 place-items-center rounded-[2rem] border border-dashed border-slate-300 bg-white text-center shadow-sm">
@@ -33,6 +43,7 @@ export const GalleryGrid = ({ photos, deletingId, selectedIds, onDelete, onDownl
           photo={photo}
           deleting={deletingId === photo.id}
           selected={selectedIds.has(photo.id)}
+          canModify={canModify}
           onDelete={onDelete}
           onDownload={onDownload}
           onOpen={onOpen}

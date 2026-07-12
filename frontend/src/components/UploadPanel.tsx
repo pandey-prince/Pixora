@@ -1,8 +1,15 @@
 import { useAuth } from "@clerk/react";
+import axios from "axios";
 import { ImagePlus, Upload, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
-import { encryptPhoto, MAX_UPLOAD_BYTES, validateImageFile } from "../lib/crypto";
+import {
+  encryptPhoto,
+  MAX_SELECTION_COUNT,
+  prepareImageForUpload,
+  validateImageFile,
+} from "../lib/crypto";
 import { useCrypto } from "../hooks/useCrypto";
+import { useUnlockRequest } from "../hooks/useUnlockRequest";
 import { getApiError, photoApi } from "../services/api";
 import type { Photo } from "../types/photo";
 
@@ -18,6 +25,7 @@ interface SelectedFile {
 export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const { getToken } = useAuth();
   const { isUnlocked, requireMasterKey } = useCrypto();
+  const { requestUnlock } = useUnlockRequest();
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const hintId = useId();
@@ -26,33 +34,60 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [partialSuccess, setPartialSuccess] = useState("");
 
   const addFiles = (files: File[]) => {
     setError("");
     setPartialSuccess("");
-    const images = files.filter((file) => file.type.startsWith("image/"));
-    if (images.length !== files.length) setError("Only image files can be uploaded.");
+    setInfo("");
     void (async () => {
+      const images = files.filter((file) => file.type.startsWith("image/"));
+      if (images.length !== files.length) {
+        setInfo("Non-image files were skipped.");
+      }
+
+      const accepted: SelectedFile[] = [];
+      const skipped: string[] = [];
+      const compressed: string[] = [];
+
       for (const file of images) {
         const validation = await validateImageFile(file);
         if (validation) {
-          setError(validation);
-          return;
+          skipped.push(`"${file.name}" (${validation})`);
+          continue;
+        }
+        try {
+          const prepared = await prepareImageForUpload(file);
+          if (prepared.compressed) compressed.push(file.name);
+          accepted.push({
+            file: prepared.file,
+            preview: URL.createObjectURL(prepared.file),
+          });
+        } catch (prepareError) {
+          skipped.push(
+            `"${file.name}" (${prepareError instanceof Error ? prepareError.message : "could not prepare"})`,
+          );
         }
       }
-      const oversized = images.find((file) => file.size > MAX_UPLOAD_BYTES);
-      if (oversized) {
-        setError(`"${oversized.name}" exceeds the 1 MB limit.`);
-        return;
-      }
-      setSelected((current) => [
-        ...current,
-        ...images.slice(0, Math.max(0, 20 - current.length)).map((file) => ({
-          file,
-          preview: URL.createObjectURL(file),
-        })),
-      ]);
+
+      setSelected((current) => {
+        const slotsLeft = Math.max(0, MAX_SELECTION_COUNT - current.length);
+        const toAdd = accepted.slice(0, slotsLeft);
+        const overflow = accepted.length - toAdd.length;
+
+        const messages: string[] = [];
+        if (skipped.length) messages.push(`${skipped.join("; ")}`);
+        if (compressed.length) {
+          messages.push(`Compressed for upload: ${compressed.join(", ")}.`);
+        }
+        if (overflow > 0) {
+          messages.push(`Only ${MAX_SELECTION_COUNT} photos can be uploaded at a time. Extra files were not added.`);
+        }
+        if (messages.length) setInfo(messages.join(" "));
+
+        return [...current, ...toAdd];
+      });
     })();
   };
 
@@ -63,24 +98,43 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     });
   };
 
+  const uploadOne = async (item: SelectedFile, index: number, total: number) => {
+    const masterKey = requireMasterKey();
+    const attempt = async () => {
+      const token = await getToken();
+      if (!token) throw new Error("Not authenticated");
+      const encrypted = await encryptPhoto(masterKey, item.file);
+      return photoApi.upload(token, encrypted, (fileProgress) => {
+        setProgress(Math.round(((index + fileProgress / 100) / total) * 100));
+      });
+    };
+
+    try {
+      return await attempt();
+    } catch (uploadError) {
+      const isUnauthorized =
+        axios.isAxiosError(uploadError) && uploadError.response?.status === 401;
+      if (isUnauthorized) return attempt();
+      throw uploadError;
+    }
+  };
+
   const upload = async () => {
     if (!selected.length) return;
+
     if (!isUnlocked) {
-      setError("Your gallery is locked. Unlock it before uploading.");
-      return;
+      try {
+        await requestUnlock();
+      } catch {
+        return;
+      }
     }
-    const masterKey = requireMasterKey();
+
     setIsUploading(true);
     setError("");
     setPartialSuccess("");
+    setInfo("");
     setProgress(0);
-
-    const token = await getToken();
-    if (!token) {
-      setError("Not authenticated");
-      setIsUploading(false);
-      return;
-    }
 
     const total = selected.length;
     const uploaded: Photo[] = [];
@@ -90,10 +144,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     for (let index = 0; index < total; index += 1) {
       const item = selected[index]!;
       try {
-        const encrypted = await encryptPhoto(masterKey, item.file);
-        const photo = await photoApi.upload(token, encrypted, (fileProgress) => {
-          setProgress(Math.round(((index + fileProgress / 100) / total) * 100));
-        });
+        const photo = await uploadOne(item, index, total);
         uploaded.push(photo);
         URL.revokeObjectURL(item.preview);
       } catch (uploadError) {
@@ -106,15 +157,16 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
 
     if (failed.length === 0) {
       setSelected([]);
+      setPartialSuccess(`${uploaded.length} of ${total} uploaded.`);
     } else {
       setSelected(failed);
       const names = failed.map(({ file }) => file.name).join(", ");
       if (uploaded.length > 0) {
-        setPartialSuccess(`${uploaded.length} photo${uploaded.length > 1 ? "s" : ""} uploaded.`);
+        setPartialSuccess(`${uploaded.length} of ${total} uploaded.`);
         setError(
           failureReason
-            ? `${failureReason} Could not upload: ${names}.`
-            : `Failed to upload: ${names}. Fix the issue and retry the remaining files.`,
+            ? `${failureReason} Could not upload: ${names}. Tap Upload to retry the rest.`
+            : `Could not upload: ${names}. Tap Upload to retry the rest.`,
         );
       } else {
         setError(failureReason || `Upload failed for: ${names}`);
@@ -159,12 +211,17 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           type="file"
           accept="image/*"
           multiple
-          onChange={(event) => addFiles(Array.from(event.target.files ?? []))}
+          onChange={(event) => {
+            addFiles(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          }}
         />
         <div>
           <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} aria-hidden />
           <p className="font-semibold text-slate-800">Drop photos here or click to browse</p>
-          <p id={hintId} className="mt-1 text-xs text-slate-500">Up to 20 images, 1 MB each</p>
+          <p id={hintId} className="mt-1 text-xs text-slate-500">
+            Up to {MAX_SELECTION_COUNT} images; larger photos are compressed automatically
+          </p>
         </div>
       </div>
 
@@ -202,6 +259,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           )}
         </div>
       )}
+      {info && <p className="mt-3 text-sm text-amber-700">{info}</p>}
       {partialSuccess && <p className="mt-3 text-sm text-emerald-600">{partialSuccess}</p>}
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     </section>

@@ -1,4 +1,4 @@
-import { ImageOff, Loader2 } from "lucide-react";
+import { ImageOff, Lock } from "lucide-react";
 import { useUser } from "@clerk/react";
 import { useEffect, useState } from "react";
 import { decryptFromUrl, decryptFileName, type MasterKey } from "../lib/crypto";
@@ -32,6 +32,29 @@ export const decryptPhotoBlob = async (
   });
 };
 
+const ImageSkeleton = ({ label }: { label: string }) => (
+  <div
+    aria-busy="true"
+    aria-label={label}
+    className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200"
+  >
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+  </div>
+);
+
+const LockedPlaceholder = ({ label }: { label: string }) => (
+  <div
+    role="img"
+    aria-label={label}
+    className="grid h-full w-full place-items-center bg-slate-100 text-slate-400"
+  >
+    <div className="text-center">
+      <Lock size={22} className="mx-auto mb-2" />
+      <p className="text-xs font-medium">Unlock gallery to view</p>
+    </div>
+  </div>
+);
+
 const useObjectUrl = (photo: Photo, variant: Variant) => {
   const { isUnlocked, requireMasterKey } = useCrypto();
   const { user } = useUser();
@@ -41,6 +64,7 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
     return getCachedUrl(cacheKey(userId, photo.id, variant));
   });
   const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(!url && photo.encrypted);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,12 +76,24 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
       const key = cacheKey(userId, photo.id, variant);
       const cached = getCachedUrl(key);
       if (cached) {
-        if (!cancelled) setUrl(cached);
+        if (!cancelled) {
+          setUrl(cached);
+          setLoading(false);
+        }
         return;
       }
-      if (!isUnlocked) return;
+      if (!isUnlocked) {
+        if (!cancelled) {
+          setLoading(false);
+          setUrl(null);
+        }
+        return;
+      }
 
-      if (!cancelled) setFailed(false);
+      if (!cancelled) {
+        setFailed(false);
+        setLoading(true);
+      }
       try {
         const blob = await decryptPhotoBlob(requireMasterKey(), photo, variant);
         if (cancelled) return;
@@ -66,6 +102,8 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
         setUrl(objectUrl);
       } catch {
         if (!cancelled) setFailed(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -74,7 +112,7 @@ const useObjectUrl = (photo: Photo, variant: Variant) => {
     };
   }, [photo, variant, isUnlocked, userId, requireMasterKey]);
 
-  return { url, failed };
+  return { url, failed, loading, locked: photo.encrypted && !isUnlocked };
 };
 
 interface EncryptedImageProps {
@@ -86,7 +124,15 @@ interface EncryptedImageProps {
 }
 
 export const EncryptedImage = ({ photo, variant = "thumb", alt, className, onClick }: EncryptedImageProps) => {
-  const { url, failed } = useObjectUrl(photo, variant);
+  const { url, failed, loading, locked } = useObjectUrl(photo, variant);
+
+  if (locked) {
+    return (
+      <div className={className} onClick={onClick}>
+        <LockedPlaceholder label={`${alt} is locked`} />
+      </div>
+    );
+  }
 
   if (failed) {
     return (
@@ -101,14 +147,10 @@ export const EncryptedImage = ({ photo, variant = "thumb", alt, className, onCli
     );
   }
 
-  if (!url) {
+  if (!url || loading) {
     return (
-      <div
-        aria-busy="true"
-        aria-label={`Decrypting ${alt}`}
-        className={`grid place-items-center bg-slate-100 text-slate-300 ${className ?? ""}`}
-      >
-        <Loader2 size={20} className="animate-spin" />
+      <div className={className} onClick={onClick}>
+        <ImageSkeleton label={`Loading ${alt}`} />
       </div>
     );
   }

@@ -4,8 +4,8 @@ import { Camera, Check, Download, Images, Lock, Settings, X } from "lucide-react
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
+import { GalleryPagination } from "../components/GalleryPagination";
 import { GallerySkeleton } from "../components/GallerySkeleton";
-import { InfiniteScrollTrigger } from "../components/InfiniteScrollTrigger";
 import { PhotoLightbox } from "../components/PhotoLightbox";
 import { ProfileMenu } from "../components/ProfileMenu";
 import { SecuritySettingsModal } from "../components/SecuritySettingsModal";
@@ -22,7 +22,7 @@ export const GalleryPage = () => {
   const { user } = useUser();
   const { isUnlocked, lock, requireMasterKey, state: cryptoState } = useCrypto();
   useAutoLock();
-  const { photos, isLoading, isLoadingMore, hasMore, error, reload, loadMore, addPhotos, removePhoto } = usePhotos();
+  const { photos, isLoading, error, pagination, goToPage, reload, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
   const [actionError, setActionError] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -35,6 +35,7 @@ export const GalleryPage = () => {
   const selectedIdSet = useMemo(() => new Set(activeSelectedIds), [activeSelectedIds]);
 
   const handleDelete = async (photo: Photo) => {
+    if (!isUnlocked) return;
     const displayName =
       photo.encrypted && isUnlocked ? await resolveFileName(requireMasterKey(), photo) : photo.fileName;
     if (!window.confirm(`Delete "${displayName}"? This cannot be undone.`)) return;
@@ -58,13 +59,17 @@ export const GalleryPage = () => {
   );
 
   const toggleSelect = (photo: Photo) => {
+    if (!isUnlocked) return;
     setSelectedIds((current) =>
       current.includes(photo.id) ? current.filter((id) => id !== photo.id) : [...current, photo.id],
     );
   };
 
   const clearSelection = () => setSelectedIds([]);
-  const selectAllVisible = () => setSelectedIds(photos.map((photo) => photo.id));
+  const selectAllVisible = () => {
+    if (!isUnlocked) return;
+    setSelectedIds(photos.map((photo) => photo.id));
+  };
 
   const downloadBlob = async (blob: Blob, fileName: string) => {
     const objectUrl = URL.createObjectURL(blob);
@@ -94,6 +99,7 @@ export const GalleryPage = () => {
   };
 
   const downloadPhoto = async (photo: Photo) => {
+    if (!isUnlocked) return;
     try {
       const [blob, name] = await Promise.all([fetchPhotoBlob(photo), fetchPhotoName(photo)]);
       await downloadBlob(blob, name);
@@ -103,7 +109,7 @@ export const GalleryPage = () => {
   };
 
   const downloadSelected = async () => {
-    if (!selectedPhotos.length) return;
+    if (!isUnlocked || !selectedPhotos.length) return;
     setActionError("");
     try {
       if (selectedPhotos.length === 1) {
@@ -129,7 +135,16 @@ export const GalleryPage = () => {
     }
   };
 
+  const handleOpen = (photo: Photo) => {
+    if (photo.encrypted && !isUnlocked) return;
+    setZoomedPhoto(photo);
+  };
+
   const name = user?.firstName ?? user?.username ?? "there";
+  const photoCountLabel =
+    pagination.total > 0
+      ? `${photos.length} of ${pagination.total} on this page`
+      : `${photos.length} loaded`;
 
   return (
     <main className="min-h-screen bg-[#f8f7f4] text-slate-950">
@@ -145,7 +160,7 @@ export const GalleryPage = () => {
           <div className="flex items-center gap-4">
             <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 sm:flex">
               <Images size={14} className="text-violet-500" />
-              {photos.length} loaded
+              {photoCountLabel}
             </div>
             <button
               type="button"
@@ -185,7 +200,7 @@ export const GalleryPage = () => {
             {error && <button type="button" className="font-semibold" onClick={reload}>Retry</button>}
           </div>
         )}
-        {selectedPhotos.length > 0 && (
+        {isUnlocked && selectedPhotos.length > 0 && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-violet-200 bg-white px-4 py-3 shadow-sm">
             <div>
               <p className="text-sm font-semibold text-slate-900">{selectedPhotos.length} selected</p>
@@ -227,12 +242,18 @@ export const GalleryPage = () => {
               photos={photos}
               deletingId={deletingId}
               selectedIds={selectedIdSet}
+              canModify={isUnlocked}
               onDelete={(photo) => void handleDelete(photo)}
               onDownload={(photo) => void downloadPhoto(photo)}
-              onOpen={(photo) => setZoomedPhoto(photo)}
+              onOpen={handleOpen}
               onToggleSelect={toggleSelect}
             />
-            {photos.length > 0 && <InfiniteScrollTrigger hasMore={hasMore} isLoading={isLoadingMore} onLoadMore={loadMore} />}
+            <GalleryPagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              onPageChange={goToPage}
+            />
           </>
         )}
       </div>
