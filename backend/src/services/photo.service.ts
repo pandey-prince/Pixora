@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { env } from "../config/env";
 import { HttpError } from "../utils/http-error";
 import {
   deleteEncryptedAsset,
@@ -70,6 +71,14 @@ const withSignedUrls = <T extends {
 export const createEncryptedPhoto = async (userId: string, input: EncryptedPhotoInput) => {
   if (!(await userHasEncryptionKeys(userId))) {
     throw new HttpError(409, "Set up encryption before uploading photos");
+  }
+
+  const photoCount = await prisma.photo.count({ where: { userId } });
+  if (photoCount >= env.MAX_PHOTOS_PER_USER) {
+    throw new HttpError(
+      403,
+      `Free tier limit reached: you can only store ${env.MAX_PHOTOS_PER_USER} photos.`,
+    );
   }
 
   const uploadedPublicIds: string[] = [];

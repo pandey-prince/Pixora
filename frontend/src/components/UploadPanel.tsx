@@ -8,6 +8,11 @@ import {
   prepareImageForUpload,
   validateImageFile,
 } from "../lib/crypto";
+import {
+  FREE_TIER_LIMIT_REACHED_MESSAGE,
+  MAX_PHOTOS_PER_USER,
+  freeTierSlotsRemaining,
+} from "../lib/limits";
 import { useCrypto } from "../hooks/useCrypto";
 import { useUnlockRequest } from "../hooks/useUnlockRequest";
 import { getApiError, photoApi } from "../services/api";
@@ -15,6 +20,7 @@ import type { Photo } from "../types/photo";
 
 interface UploadPanelProps {
   onUploaded: (photos: Photo[]) => void;
+  photoTotal: number;
 }
 
 interface SelectedFile {
@@ -22,7 +28,7 @@ interface SelectedFile {
   preview: string;
 }
 
-export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
+export const UploadPanel = ({ onUploaded, photoTotal }: UploadPanelProps) => {
   const { getToken } = useAuth();
   const { isUnlocked, requireMasterKey } = useCrypto();
   const { requestUnlock } = useUnlockRequest();
@@ -37,7 +43,15 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   const [info, setInfo] = useState("");
   const [partialSuccess, setPartialSuccess] = useState("");
 
+  const quotaFull = photoTotal >= MAX_PHOTOS_PER_USER;
+  const slotsRemaining = freeTierSlotsRemaining(photoTotal);
+
   const addFiles = (files: File[]) => {
+    if (quotaFull) {
+      setError(FREE_TIER_LIMIT_REACHED_MESSAGE);
+      return;
+    }
+
     setError("");
     setPartialSuccess("");
     setInfo("");
@@ -72,7 +86,9 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
       }
 
       setSelected((current) => {
-        const slotsLeft = Math.max(0, MAX_SELECTION_COUNT - current.length);
+        const batchSlotsLeft = Math.max(0, MAX_SELECTION_COUNT - current.length);
+        const quotaSlotsLeft = Math.max(0, slotsRemaining - current.length);
+        const slotsLeft = Math.min(batchSlotsLeft, quotaSlotsLeft);
         const toAdd = accepted.slice(0, slotsLeft);
         const overflow = accepted.length - toAdd.length;
 
@@ -82,7 +98,13 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           messages.push(`Compressed for upload: ${compressed.join(", ")}.`);
         }
         if (overflow > 0) {
-          messages.push(`Only ${MAX_SELECTION_COUNT} photos can be uploaded at a time. Extra files were not added.`);
+          if (quotaSlotsLeft < batchSlotsLeft) {
+            messages.push(
+              `Free tier allows ${MAX_PHOTOS_PER_USER} photos total. You can only add ${quotaSlotsLeft} more.`,
+            );
+          } else {
+            messages.push(`Only ${MAX_SELECTION_COUNT} photos can be uploaded at a time. Extra files were not added.`);
+          }
         }
         if (messages.length) setInfo(messages.join(" "));
 
@@ -120,7 +142,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
   };
 
   const upload = async () => {
-    if (!selected.length) return;
+    if (!selected.length || quotaFull) return;
 
     if (!isUnlocked) {
       try {
@@ -176,31 +198,56 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
     setIsUploading(false);
   };
 
-  const openFilePicker = () => inputRef.current?.click();
+  const openFilePicker = () => {
+    if (quotaFull) {
+      setError(FREE_TIER_LIMIT_REACHED_MESSAGE);
+      return;
+    }
+    inputRef.current?.click();
+  };
 
   return (
     <section className="mb-10 rounded-[2rem] border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
+      {quotaFull && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {FREE_TIER_LIMIT_REACHED_MESSAGE}
+        </div>
+      )}
       <div
         role="button"
-        tabIndex={0}
+        tabIndex={quotaFull ? -1 : 0}
         aria-labelledby={inputId}
         aria-describedby={hintId}
+        aria-disabled={quotaFull}
         onKeyDown={(event) => {
+          if (quotaFull) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             openFilePicker();
           }
         }}
-        onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
+        onDragEnter={(event) => {
+          if (quotaFull) return;
+          event.preventDefault();
+          setIsDragging(true);
+        }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setIsDragging(false)}
         onDrop={(event) => {
           event.preventDefault();
           setIsDragging(false);
+          if (quotaFull) {
+            setError(FREE_TIER_LIMIT_REACHED_MESSAGE);
+            return;
+          }
           addFiles(Array.from(event.dataTransfer.files));
         }}
-        className={`grid min-h-28 cursor-pointer place-items-center rounded-[1.4rem] border border-dashed p-5 text-center transition ${
-          isDragging ? "border-violet-500 bg-violet-50" : "border-slate-300 bg-slate-50/60 hover:border-violet-400 hover:bg-violet-50/50"
+        className={`grid min-h-28 place-items-center rounded-[1.4rem] border border-dashed p-5 text-center transition ${
+          quotaFull
+            ? "cursor-not-allowed border-slate-200 bg-slate-100/80 opacity-70"
+            : isDragging
+              ? "cursor-pointer border-violet-500 bg-violet-50"
+              : "cursor-pointer border-slate-300 bg-slate-50/60 hover:border-violet-400 hover:bg-violet-50/50"
         }`}
         onClick={openFilePicker}
       >
@@ -211,6 +258,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           type="file"
           accept="image/*"
           multiple
+          disabled={quotaFull}
           onChange={(event) => {
             addFiles(Array.from(event.target.files ?? []));
             event.target.value = "";
@@ -218,9 +266,12 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
         />
         <div>
           <ImagePlus className="mx-auto mb-2 text-violet-600" size={22} aria-hidden />
-          <p className="font-semibold text-slate-800">Drop photos here or click to browse</p>
+          <p className="font-semibold text-slate-800">
+            {quotaFull ? "Upload limit reached" : "Drop photos here or click to browse"}
+          </p>
           <p id={hintId} className="mt-1 text-xs text-slate-500">
-            Up to {MAX_SELECTION_COUNT} images; larger photos are compressed automatically
+            {photoTotal} / {MAX_PHOTOS_PER_USER} photos used
+            {!quotaFull && ` · up to ${MAX_SELECTION_COUNT} at a time; large photos are compressed automatically`}
           </p>
         </div>
       </div>
@@ -246,7 +297,7 @@ export const UploadPanel = ({ onUploaded }: UploadPanelProps) => {
           <button
             type="button"
             onClick={() => void upload()}
-            disabled={isUploading}
+            disabled={isUploading || quotaFull}
             className="mt-3 inline-flex items-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60"
           >
             <Upload size={16} />

@@ -17,6 +17,7 @@ const envSchema = z.object({
     .transform((url) => url.replace(/\/$/, "")),
   /** Comma-separated extra browser origins allowed by CORS (optional). */
   ALLOWED_ORIGINS: z.string().optional(),
+  MAX_PHOTOS_PER_USER: z.coerce.number().int().positive().default(100),
   PORT: z.coerce.number().int().positive().default(4000),
 });
 

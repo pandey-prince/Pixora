@@ -218,7 +218,7 @@ export const GalleryPage = () => {
             <p className="mt-3 text-sm text-slate-500">Upload your favorites. We’ll keep the view calm and beautiful.</p>
           </div>
         </div>
-        <UploadPanel onUploaded={addPhotos} />
+        <UploadPanel onUploaded={addPhotos} photoTotal={pagination.total} />
         {(error || actionError) && (
           <div className="mb-5 flex items-center justify-between rounded-xl bg-red-50 p-3 text-sm text-red-700">
             <span>{error || actionError}</span>
