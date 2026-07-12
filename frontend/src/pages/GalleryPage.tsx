@@ -1,6 +1,6 @@
 import { useAuth, useUser } from "@clerk/react";
 import JSZip from "jszip";
-import { Camera, Check, Download, Images, Lock, Settings, X } from "lucide-react";
+import { Camera, Check, Download, Images, Lock, Settings, Trash2, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { GalleryGrid } from "../components/GalleryGrid";
@@ -24,6 +24,7 @@ export const GalleryPage = () => {
   useAutoLock();
   const { photos, isLoading, error, pagination, goToPage, reload, addPhotos, removePhoto } = usePhotos();
   const [deletingId, setDeletingId] = useState("");
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
   const [actionError, setActionError] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoomedPhoto, setZoomedPhoto] = useState<Photo | null>(null);
@@ -135,6 +136,30 @@ export const GalleryPage = () => {
     }
   };
 
+  const deleteSelected = async () => {
+    if (!isUnlocked || !selectedPhotos.length || isDeletingSelected) return;
+    const count = selectedPhotos.length;
+    const label = count === 1 ? "this photo" : `these ${count} photos`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+    setIsDeletingSelected(true);
+    setActionError("");
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Not authenticated");
+
+      for (const photo of selectedPhotos) {
+        await photoApi.remove(token, photo.id);
+        removePhoto(photo.id);
+      }
+      setSelectedIds([]);
+    } catch (deleteError) {
+      setActionError(getApiError(deleteError));
+    } finally {
+      setIsDeletingSelected(false);
+    }
+  };
+
   const handleOpen = (photo: Photo) => {
     if (photo.encrypted && !isUnlocked) return;
     setZoomedPhoto(photo);
@@ -204,7 +229,7 @@ export const GalleryPage = () => {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[1.25rem] border border-violet-200 bg-white px-4 py-3 shadow-sm">
             <div>
               <p className="text-sm font-semibold text-slate-900">{selectedPhotos.length} selected</p>
-              <p className="text-xs text-slate-500">Download one file or bundle them into a zip.</p>
+              <p className="text-xs text-slate-500">Download, delete, or manage your selection.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -222,6 +247,15 @@ export const GalleryPage = () => {
               >
                 <X size={15} />
                 Clear
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingSelected}
+                onClick={() => void deleteSelected()}
+                className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:opacity-60"
+              >
+                <Trash2 size={15} />
+                {isDeletingSelected ? "Deleting..." : "Delete"}
               </button>
               <button
                 type="button"
