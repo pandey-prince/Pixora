@@ -17,7 +17,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://res.cloudinary.com https://*.cloudinary.com https://pixora-4nya.onrender.com https://vitals.vercel-insights.com; frame-src https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com; worker-src 'self' blob:; font-src 'self' data:"
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.pixora-gallery.online https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.pixora-gallery.online https://accounts.pixora-gallery.online https://res.cloudinary.com https://*.cloudinary.com https://pixora-4nya.onrender.com https://vitals.vercel-insights.com; frame-src https://*.clerk.accounts.dev https://*.clerk.com https://clerk.pixora-gallery.online https://accounts.pixora-gallery.online https://challenges.cloudflare.com; worker-src 'self' blob:; font-src 'self' data:"
         }
       ]
     }
