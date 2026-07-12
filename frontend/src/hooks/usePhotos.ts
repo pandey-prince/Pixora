@@ -40,7 +40,8 @@ export const usePhotos = () => {
   }, [getToken]);
 
   useEffect(() => {
-    void loadPage(1);
+    const frame = window.requestAnimationFrame(() => void loadPage(1));
+    return () => window.cancelAnimationFrame(frame);
   }, [loadPage]);
 
   const goToPage = useCallback(

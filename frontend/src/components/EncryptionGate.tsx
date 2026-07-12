@@ -377,10 +377,10 @@ const EncryptionGateInner = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (state !== "locked" && state !== "needs-setup") {
-      setBrowseCheckDone(true);
-      return;
+      const frame = window.requestAnimationFrame(() => setBrowseCheckDone(true));
+      return () => window.cancelAnimationFrame(frame);
     }
-    setBrowseCheckDone(false);
+    const frame = window.requestAnimationFrame(() => setBrowseCheckDone(false));
     let cancelled = false;
     void (async () => {
       try {
@@ -398,6 +398,7 @@ const EncryptionGateInner = ({ children }: { children: ReactNode }) => {
     })();
     return () => {
       cancelled = true;
+      window.cancelAnimationFrame(frame);
     };
   }, [state, getToken]);
 

@@ -30,8 +30,11 @@ export const UnlockRequestProvider = ({ children }: { children: ReactNode }) => 
     if (!isUnlocked) return;
     for (const resolve of resolversRef.current) resolve();
     resolversRef.current = [];
-    setShowUnlockModal(false);
-    setShowSetupModal(false);
+    const frame = window.requestAnimationFrame(() => {
+      setShowUnlockModal(false);
+      setShowSetupModal(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [isUnlocked]);
 
   const requestUnlock = useCallback(() => {
