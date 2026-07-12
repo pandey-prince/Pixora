@@ -1,4 +1,7 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+
+const userOrIpKey = (req: { dbUser?: { id: string }; ip?: string }) =>
+  req.dbUser?.id ?? ipKeyGenerator(req.ip ?? "unknown");
 
 export const globalRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -22,7 +25,7 @@ export const uploadRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many uploads. Try again later." },
-  keyGenerator: (req) => req.dbUser?.id ?? req.ip ?? "unknown",
+  keyGenerator: userOrIpKey,
 });
 
 export const cryptoRateLimit = rateLimit({
@@ -31,7 +34,7 @@ export const cryptoRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many encryption requests. Try again later." },
-  keyGenerator: (req) => req.dbUser?.id ?? req.ip ?? "unknown",
+  keyGenerator: userOrIpKey,
 });
 
 export const listRateLimit = rateLimit({
@@ -40,5 +43,5 @@ export const listRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many gallery requests. Try again later." },
-  keyGenerator: (req) => req.dbUser?.id ?? req.ip ?? "unknown",
+  keyGenerator: userOrIpKey,
 });
