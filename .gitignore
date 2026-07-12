@@ -10,3 +10,4 @@ backend/.local-uploads/
 .DS_Store
 **/deploy-check.err
 backend/package-lock.json
+.vercel
