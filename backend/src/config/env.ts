@@ -15,6 +15,8 @@ const envSchema = z.object({
     .url()
     .default("http://localhost:5173")
     .transform((url) => url.replace(/\/$/, "")),
+  /** Comma-separated extra browser origins allowed by CORS (optional). */
+  ALLOWED_ORIGINS: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(4000),
 });
 

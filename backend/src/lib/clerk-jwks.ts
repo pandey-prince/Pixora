@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { getAllowedOrigins } from "../config/allowed-origins";
 import { env } from "../config/env";
 import { HttpError } from "../utils/http-error";
 
@@ -13,7 +14,7 @@ const jwks = createRemoteJWKSet(new URL(`https://${clerkFrontendApi}/.well-known
 export const isJwtAuthMode = () => env.CLERK_AUTH_MODE === "jwt";
 
 const allowedAzp = new Set([
-  env.FRONTEND_URL,
+  ...getAllowedOrigins(),
   env.CLERK_PUBLISHABLE_KEY,
   `https://${clerkFrontendApi}`,
 ]);
