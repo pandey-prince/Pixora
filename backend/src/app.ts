@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { clerkMiddleware } from "@clerk/express";
 import cors from "cors";
 import express from "express";
+import { getAllowedOrigins, isAllowedOrigin } from "./config/allowed-origins";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireApiAuth } from "./middleware/auth.middleware";
@@ -30,17 +31,11 @@ app.use(
   }),
 );
 
-const normalizeOrigin = (origin: string) => origin.replace(/\/$/, "");
-
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (normalizeOrigin(origin) === normalizeOrigin(env.FRONTEND_URL)) {
-        callback(null, origin);
+      if (isAllowedOrigin(origin)) {
+        callback(null, origin ?? true);
         return;
       }
       callback(new Error("Not allowed by CORS"));
