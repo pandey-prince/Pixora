@@ -17,6 +17,8 @@ const allowedAzp = new Set([
   ...getAllowedOrigins(),
   env.CLERK_PUBLISHABLE_KEY,
   `https://${clerkFrontendApi}`,
+  "https://clerk.pixora-gallery.online",
+  "https://accounts.pixora-gallery.online",
 ]);
 
 const assertAuthorizedParty = (payload: JWTPayload) => {

@@ -63,10 +63,11 @@ const resolveDbUserFromJwt = async (clerkId: string, email: string) => {
 };
 
 export const requireApiAuth: RequestHandler = asyncHandler(async (req, _res, next) => {
-  if (isJwtAuthMode()) {
-    const token = bearerToken(req.headers.authorization);
-    if (!token) throw new HttpError(401, "Unauthorized");
+  const token = bearerToken(req.headers.authorization);
 
+  // SPA clients always send Clerk bearer tokens — verify JWT directly so we do not
+  // depend on Clerk Backend API user lookups (which break across dev/prod key mismatches).
+  if (token) {
     const payload = await verifyClerkBearerToken(token);
     const clerkId = payload.sub;
     if (!clerkId) throw new HttpError(401, "Unauthorized");
@@ -83,6 +84,10 @@ export const requireApiAuth: RequestHandler = asyncHandler(async (req, _res, nex
     req.dbUser = user;
     next();
     return;
+  }
+
+  if (isJwtAuthMode()) {
+    throw new HttpError(401, "Unauthorized");
   }
 
   const { userId } = getAuth(req);
