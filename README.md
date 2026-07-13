@@ -148,12 +148,25 @@ updated app.
 
 ### Backend
 
-Deploy `backend/` to a Bun-compatible host such as Railway, Render, Fly.io, or a container platform. Configure all backend environment variables, set the start command to `bun run start`, and run migrations during release:
+Deploy `backend/` to a Bun-compatible host such as Railway, Render, Fly.io, or a container platform. Configure all backend environment variables.
+
+**Render (recommended):**
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `backend` |
+| Build Command | `bun install --frozen-lockfile && bunx prisma generate` |
+| Pre-Deploy Command | `bash scripts/migrate-deploy.sh` |
+| Start Command | `bun run start` |
+
+Run migrations in **Pre-Deploy**, not Start — running `prisma migrate deploy` on every instance causes advisory-lock timeouts (P1002) during rolling deploys. See [`render.yaml`](render.yaml) for a blueprint.
+
+For Neon, use a pooled `DATABASE_URL` (`-pooler` hostname) for the app. The migrate script auto-uses a direct connection (or set optional `DIRECT_URL`).
 
 ```bash
 bun install --frozen-lockfile
 bunx prisma generate
-bunx prisma migrate deploy
+bash scripts/migrate-deploy.sh
 bun run start
 ```
 

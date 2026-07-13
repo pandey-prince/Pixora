@@ -12,4 +12,20 @@ elif [[ "${DATABASE_URL:-}" == *"-pooler"* ]]; then
   echo "migrate-deploy: using direct Neon URL (removed -pooler from DATABASE_URL)"
 fi
 
-bunx prisma migrate deploy
+# Pre-deploy runs once per Render release. Disable advisory lock to avoid P1002
+# when a previous deploy instance still holds the lock during rolling updates.
+export PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK="${PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK:-1}"
+
+max_attempts=3
+for attempt in $(seq 1 "$max_attempts"); do
+  if bunx prisma migrate deploy; then
+    exit 0
+  fi
+  if [[ "$attempt" -lt "$max_attempts" ]]; then
+    echo "migrate-deploy: attempt $attempt failed, retrying in 5s..."
+    sleep 5
+  fi
+done
+
+echo "migrate-deploy: failed after $max_attempts attempts" >&2
+exit 1
