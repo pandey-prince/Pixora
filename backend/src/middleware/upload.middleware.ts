@@ -8,5 +8,6 @@ import multer from "multer";
  */
 export const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 1048576, files: 2 },
+  // Client compresses to ~900 KB; ciphertext + GCM tag can exceed a strict 1 MB cap.
+  limits: { fileSize: 2 * 1024 * 1024, files: 2 },
 });

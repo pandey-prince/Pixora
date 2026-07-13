@@ -41,6 +41,9 @@ app.use(
       callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 86400,
   }),
 );
 
