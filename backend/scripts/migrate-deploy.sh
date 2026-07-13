@@ -12,8 +12,8 @@ elif [[ "${DATABASE_URL:-}" == *"-pooler"* ]]; then
   echo "migrate-deploy: using direct Neon URL (removed -pooler from DATABASE_URL)"
 fi
 
-# Pre-deploy runs once per Render release. Disable advisory lock to avoid P1002
-# when a previous deploy instance still holds the lock during rolling updates.
+# Pre-deploy runs once per Render release (paid plans only). On Render free tier,
+# migrations run from scripts/start-render.sh at container start instead.
 export PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK="${PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK:-1}"
 
 max_attempts=3

@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
-    "start": "bun src/server.ts",
-    "release": "bash scripts/migrate-deploy.sh",
+    "start": "bash scripts/start-render.sh",
     "typecheck": "tsc --noEmit",
     "test": "bun test src/",
     "prisma:generate": "prisma generate",

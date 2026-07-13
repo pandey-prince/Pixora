@@ -150,25 +150,19 @@ updated app.
 
 Deploy `backend/` to a Bun-compatible host such as Railway, Render, Fly.io, or a container platform. Configure all backend environment variables.
 
-**Render (recommended):**
+**Render free tier** (no pre-deploy command):
 
 | Setting | Value |
 | --- | --- |
 | Root Directory | `backend` |
 | Build Command | `bun install --frozen-lockfile && bunx prisma generate` |
-| Pre-Deploy Command | `bash scripts/migrate-deploy.sh` |
 | Start Command | `bun run start` |
 
-Run migrations in **Pre-Deploy**, not Start — running `prisma migrate deploy` on every instance causes advisory-lock timeouts (P1002) during rolling deploys. See [`render.yaml`](render.yaml) for a blueprint.
+`bun run start` runs migrations then the API (`scripts/start-render.sh`). Migrations use a direct Neon connection and disable Prisma advisory locks to avoid P1002 on free tier.
+
+**Render paid** (optional): set Pre-Deploy to `bash scripts/migrate-deploy.sh` and Start to `bun src/server.ts` if you prefer migrations outside start.
 
 For Neon, use a pooled `DATABASE_URL` (`-pooler` hostname) for the app. The migrate script auto-uses a direct connection (or set optional `DIRECT_URL`).
-
-```bash
-bun install --frozen-lockfile
-bunx prisma generate
-bash scripts/migrate-deploy.sh
-bun run start
-```
 
 Set `FRONTEND_URL` to the production frontend origin and update the Clerk webhook endpoint to the deployed backend URL.
 

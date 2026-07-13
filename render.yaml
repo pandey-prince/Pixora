@@ -1,9 +1,5 @@
-# Render blueprint for the Pixora backend API.
-# If you already created the service in the dashboard, set these manually instead:
-#   Root Directory: backend
-#   Build Command:  bun install --frozen-lockfile && bunx prisma generate
-#   Pre-Deploy:     bash scripts/migrate-deploy.sh
-#   Start Command:  bun run start
+# Render blueprint (paid plans support preDeployCommand).
+# Render FREE tier: use only Build + Start — migrations run in start-render.sh.
 
 services:
   - type: web
@@ -11,6 +7,5 @@ services:
     runtime: node
     rootDir: backend
     buildCommand: bun install --frozen-lockfile && bunx prisma generate
-    preDeployCommand: bash scripts/migrate-deploy.sh
     startCommand: bun run start
     healthCheckPath: /health
