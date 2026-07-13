@@ -4,12 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
-    "start": "bunx prisma migrate deploy && bun src/server.ts",
+    "start": "bash scripts/migrate-deploy.sh && bun src/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test src/",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "bash scripts/migrate-deploy.sh"
   },
   "dependencies": {
     "@clerk/express": "^2.1.23",
