@@ -19,9 +19,9 @@ CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
 CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
 FRONTEND_URL=https://pixora-gallery.online
 
-WEBHOOK_SECRET=<from Clerk Production → Webhooks → pixora-4nya.onrender.com/clerk/webhook>
+WEBHOOK_SECRET=<from Clerk Production → Webhooks → pixora-2a39.onrender.com/clerk/webhook>
 
 Clerk production webhook URL:
-  https://pixora-4nya.onrender.com/clerk/webhook
+  https://pixora-2a39.onrender.com/clerk/webhook
   Events: user.created, user.updated, user.deleted
 EOF

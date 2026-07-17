@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const apiTarget = env.VITE_DEV_API_PROXY ?? "https://pixora-4nya.onrender.com";
+  const apiTarget = env.VITE_DEV_API_PROXY ?? "https://pixora-2a39.onrender.com";
 
   return {
     plugins: [react(), tailwindcss()],
