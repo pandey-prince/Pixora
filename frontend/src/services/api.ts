@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getApiBaseUrl } from "../config/api";
 import type {
   EncryptedUpload,
   KeyStatus,
@@ -8,7 +9,7 @@ import type {
 } from "../types/photo";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: getApiBaseUrl(),
   timeout: 60_000,
 });
 

@@ -1,4 +1,5 @@
 import { argon2id } from "hash-wasm";
+import { getApiBaseUrl } from "../config/api";
 
 /**
  * End-to-end encryption primitives for Pixora.
@@ -163,13 +164,10 @@ export const prepareImageForUpload = async (
 
 const allowedAssetHosts = () => {
   const hosts = new Set(["res.cloudinary.com", "localhost", "127.0.0.1"]);
-  const apiUrl = import.meta.env.VITE_API_URL;
-  if (apiUrl) {
-    try {
-      hosts.add(new URL(apiUrl).hostname);
-    } catch {
-      /* ignore invalid env */
-    }
+  try {
+    hosts.add(new URL(getApiBaseUrl()).hostname);
+  } catch {
+    hosts.add("pixora-2a39.onrender.com");
   }
   return hosts;
 };
